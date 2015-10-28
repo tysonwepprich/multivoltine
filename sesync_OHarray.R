@@ -25,6 +25,7 @@ library(reshape2)
 ##########
 #DATA PREP
 ##########
+yr <- 2009
 
 # setwd("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012")
 data <- fread("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/data.trim.csv", header = TRUE)
@@ -33,13 +34,13 @@ setnames(data,"SiteID.x","SiteID")
 data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
 data[, SiteDate := ymd(as.character(SiteDate))]
 
-dat <- data[year(SiteDate) == 2008]
+dat <- data[year(SiteDate) == yr]
 dat[, `:=` (WeekPerYear = length(unique(Week))), 
           by = list(SiteID)]
 dat <- dat[WeekPerYear > 15]
 
 surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID"), with = FALSE])
-surveys <- surveys[year(SiteDate) == 2008]
+surveys <- surveys[year(SiteDate) == yr]
 
 
 #select top species for dataset
@@ -52,7 +53,7 @@ SpeciesNum <- dat %>%
 SpeciesList <- SpeciesNum[-grep("Unidentified", SpeciesNum$CommonName, fixed = TRUE), ]
 SpeciesList <- SpeciesList[-which(SpeciesList$CommonName == "None seen this day"), ]
 SpeciesList <- filter(SpeciesList, Present > 50)
-saveRDS(SpeciesList, "species_expanded.rds")
+saveRDS(SpeciesList, paste("species", yr, "rds", sep = "."))
 
 
 dat <- dat[CommonName %in% SpeciesList$CommonName]
@@ -88,7 +89,7 @@ for (i in 1:length(species)){
   count_array[,,i] <- count_matrix
 }
 
-saveRDS(count_array, "count_array_expanded.rds")
+saveRDS(count_array, paste("count_array", yr, "rds", sep = "."))
 
 #covariates
 
@@ -148,7 +149,7 @@ cov_array[,,7] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ]
 cov_array[,,8] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zjulian", ], SiteID ~ Week, value = "value"))
 
 
-saveRDS(cov_array, "covariates_array_expanded.rds")
+saveRDS(cov_array, paste("covariates_array", yr, "rds", sep = "."))
 
 
 
@@ -170,7 +171,7 @@ gdd_summary <- gdd %>%
 gdd_summary[SpringGDD == -Inf]$SpringGDD <- NA
 
 #spring and yearly GDD have lowest correlation, but still .62.
-gdd_covs <- gdd_summary[Year == 2008]
+gdd_covs <- gdd_summary[Year == yr]
 
 #TODO
 #still have problem of volunteers doing >1 survey per week
@@ -197,7 +198,7 @@ rowReplace <- which(dists == mindist)
 cov_sites[rowNA, c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
 
 
-saveRDS(cov_sites, "covariates_sites_expanded.rds")
+saveRDS(cov_sites, paste("covariates_sites", yr, "rds", sep = "."))
 
 # 
 # 
