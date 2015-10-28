@@ -13,7 +13,7 @@
 
 # load libraries
 # SESYNC and SLURM
-setwd("stopover")
+# setwd("stopover")
 # devtools::install_github("SESYNC-ci/rslurm")
 
 library(rslurm)
@@ -35,13 +35,13 @@ species_list <- readRDS('species_expanded.rds')
 
 # choose parameter ranges
 # nBoots <- 100 # bootstraps to perform for each parameter combination
-species <- 12 # corresponds to row in species_list
+species <- c(10, 11, 12) # corresponds to row in species_list
 raw_cutoff <- 10 # c(5, 10, 20) higher cutoff increases fit, decreases comp. time
 # Covariates for p (detection probability)
 # 7 matrices, already scaled
 # In order, temperature, temperature^2, wind, %cloud, survey duration, hour of day, #species recorded
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
-p_cov2 <- c("none", 1:6) # Select detection covariates here (1:7 possible)
+p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(1, 2, 3) #number of broods to estimate
 
@@ -54,7 +54,7 @@ M <- c(1, 2, 3) #number of broods to estimate
 # mu.m <- c("cov", "common")[1]
 sigma.m <- c("het", "hom")
 # try phi now with survey "week", code up test of week vs. calendar day for age/time covariates
-phi.m <- c("const", "logit.t", "logit.a")
+phi.m <- c("const", "logit.a")
 
 params <- expand.grid(species, raw_cutoff, p_cov1, p_cov2, 
                       site_covs, M, sigma.m, phi.m,
@@ -186,7 +186,7 @@ SlurmCovs <- function(nRun){
 }
 
 # test run of comparing different covariates with 3 bootstraps for each combo
-sjob4 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+sjob1 <- slurm_apply(f = SlurmCovs, params = paramIN, 
                      cpus_per_node = 8, nodes = 10, 
                      data_file = "dataIN.RData", 
                      # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 

@@ -4,7 +4,7 @@ slurm_out <- list()
 missing_files <- c()
 tmpEnv <- new.env()
 for (i in 0:3) {
-  fname <- paste0("slr8743", "_", i, 
+  fname <- paste0("slr3198", "_", i, 
                   ".RData")
   if (fname %in% dir()) {
     load(fname, envir = tmpEnv)
