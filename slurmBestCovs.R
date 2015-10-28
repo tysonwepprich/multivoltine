@@ -21,9 +21,10 @@ library(devtools)
 library(msm)
 library(parallel)
 library(dplyr)
+# on Windows laptop, load_all works, not install.package
 # install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
-# devtools::load_all("StopoverCode")
+# library(StopoverCode)
+devtools::load_all("StopoverCode", recompile = TRUE)
 # this was replaced by 'StopoverCode' package, loaded with library
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
 
@@ -44,6 +45,9 @@ p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(1, 2, 3) #number of broods to estimate
+p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
+site_covs <- "AnnGDD" #c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+M <- c(2) #number of broods to estimate
 
 # can't just use these in expand.grid, because "common" limits options of other params
 # what to do: find best covariate models first, then test against "common" 
@@ -52,7 +56,7 @@ M <- c(1, 2, 3) #number of broods to estimate
 # p.m <- c("cov", "common")[1]
 # w.m <- c("cov", "common")[1]
 # mu.m <- c("cov", "common")[1]
-sigma.m <- c("het", "hom")
+sigma.m <- "het" # c("het", "hom")
 # try phi now with survey "week", code up test of week vs. calendar day for age/time covariates
 phi.m <- c("const", "logit.a")
 
@@ -184,6 +188,21 @@ SlurmCovs <- function(nRun){
   out[[1]] <- temp
   return(out)
 }
+
+cl <- makeCluster(3)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  devtools::load_all("StopoverCode", recompile = TRUE)
+  load("dataIN.RData")
+})
+test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+stopCluster(cl)
+
+
+
+
 
 # test run of comparing different covariates with 3 bootstraps for each combo
 sjob1 <- slurm_apply(f = SlurmCovs, params = paramIN, 
