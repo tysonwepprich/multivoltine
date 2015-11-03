@@ -21,8 +21,8 @@ startVals <- function(p.m = "common", w.m = "common", mu.m = "common", sigma.m =
   b1.st <- NULL
   if(mu.m == "cov") b1.st <- 0 #slope for mu when covariate is available 
   
-  sigma.st <- log(3)  #standard deviations of arrival times
-  if(sigma.m == "het") sigma.st <- c(sigma.st, rep(log(3), M-1))
+  sigma.st <- log(6)  #standard deviations of arrival times
+  if(sigma.m == "het") sigma.st <- c(sigma.st, rep(log(6), M-1))
   
   a0.st <- logit(sample(seq(.3,.7,.1),1))	 #survival probabilities
   a1.st <- NULL; a2.st <- NULL

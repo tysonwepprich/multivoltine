@@ -20,11 +20,13 @@ library(rslurm)
 library(devtools)
 library(msm)
 library(parallel)
+library(plyr)
 library(dplyr)
 # on Windows laptop, load_all works, not install.package
-# install.packages("StopoverCode", repos = NULL, type="source")
-# library(StopoverCode)
-devtools::load_all("StopoverCode", recompile = TRUE)
+# remove.packages('StopoverCode') # do this to rebuild after edits
+install.packages("StopoverCode", repos = NULL, type="source")
+library(StopoverCode)
+# devtools::load_all("StopoverCode", recompile = TRUE)
 # this was replaced by 'StopoverCode' package, loaded with library
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
 
@@ -33,21 +35,25 @@ count_array <- readRDS('count_array_expanded.rds')
 cov_array <- readRDS('covariates_array_expanded.rds')
 cov_sites <- readRDS('covariates_sites_expanded.rds')
 species_list <- readRDS('species_expanded.rds')
+# 
+# count_array <- readRDS('count_array.2009.rds')
+# cov_array <- readRDS('covariates_array.2009.rds')
+# cov_sites <- readRDS('covariates_sites.2009.rds')
+# species_list_2009 <- readRDS('species.2009.rds')
+
+
 
 # choose parameter ranges
 # nBoots <- 100 # bootstraps to perform for each parameter combination
-species <- c(10, 11, 12) # corresponds to row in species_list
+species <- c(9:21, 23:25, 27, 28, 30:32) # corresponds to row in species_list
 raw_cutoff <- 10 # c(5, 10, 20) higher cutoff increases fit, decreases comp. time
 # Covariates for p (detection probability)
 # 7 matrices, already scaled
 # In order, temperature, temperature^2, wind, %cloud, survey duration, hour of day, #species recorded
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
-site_covs <- c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+site_covs <- "AnnGDD" # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(1, 2, 3) #number of broods to estimate
-p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
-site_covs <- "AnnGDD" #c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- c(2) #number of broods to estimate
 
 # can't just use these in expand.grid, because "common" limits options of other params
 # what to do: find best covariate models first, then test against "common" 
@@ -56,9 +62,9 @@ M <- c(2) #number of broods to estimate
 # p.m <- c("cov", "common")[1]
 # w.m <- c("cov", "common")[1]
 # mu.m <- c("cov", "common")[1]
-sigma.m <- "het" # c("het", "hom")
+sigma.m <- c("het", "hom")
 # try phi now with survey "week", code up test of week vs. calendar day for age/time covariates
-phi.m <- c("const", "logit.a")
+phi.m <- "const" # c("const", "logit.a")
 
 params <- expand.grid(species, raw_cutoff, p_cov1, p_cov2, 
                       site_covs, M, sigma.m, phi.m,
@@ -189,23 +195,50 @@ SlurmCovs <- function(nRun){
   return(out)
 }
 
-cl <- makeCluster(3)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  devtools::load_all("StopoverCode", recompile = TRUE)
-  load("dataIN.RData")
-})
-test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-stopCluster(cl)
-
+# cl <- makeCluster(3)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   devtools::load_all("StopoverCode", recompile = TRUE)
+#   load("dataIN.RData")
+# })
+# test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+# stopCluster(cl)
+# 
 
 
 
 
 # test run of comparing different covariates with 3 bootstraps for each combo
 sjob1 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                     cpus_per_node = 8, nodes = 4, 
+                     data_file = "dataIN.RData", 
+                     # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                     output = "raw")
+#2009?
+sjob2 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                     cpus_per_node = 8, nodes = 4, 
+                     data_file = "dataIN.RData", 
+                     # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                     output = "raw")
+
+#2008?
+sjob3 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                     cpus_per_node = 8, nodes = 8, 
+                     data_file = "dataIN.RData", 
+                     # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                     output = "raw")
+
+#2008 
+sjob4 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                     cpus_per_node = 8, nodes = 7, 
+                     data_file = "dataIN.RData", 
+                     # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                     output = "raw")
+
+# test if brood estimated is lower when sigma starting value is log(6) instead of log(3)
+sjob5 <- slurm_apply(f = SlurmCovs, params = paramIN, 
                      cpus_per_node = 8, nodes = 10, 
                      data_file = "dataIN.RData", 
                      # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
@@ -216,7 +249,7 @@ sjob1 <- slurm_apply(f = SlurmCovs, params = paramIN,
 # length of output list is nrow(param)*nBoots
 jobs <- list(sjob1, sjob2, sjob3, sjob4)
 jobs <- list(sjob5, sjob6, sjob7)
-jobs <- list(sjob8)
+jobs <- list(sjob5)
 outALL <- data.frame()
 for (j in 1:length(jobs)){
   outList <- get_slurm_out(jobs[[j]])
@@ -254,7 +287,7 @@ test <- covTest %>%
 
 test2 <- test %>%
   select(-raw_cutoff, -weight1) %>%
-  filter(species == 10) %>%
+  filter(species == 11) %>%
   arrange(AIC) %>%
   data.frame()
 
