@@ -8,9 +8,6 @@
 
 # Run covariate test for each species, multiple years?
 
-
-
-
 # load libraries
 # SESYNC and SLURM
 # setwd("stopover")
@@ -26,7 +23,7 @@ library(dplyr)
 # remove.packages('StopoverCode') # do this to rebuild after edits
 install.packages("StopoverCode", repos = NULL, type="source")
 library(StopoverCode)
-# devtools::load_all("StopoverCode", recompile = TRUE)
+# devtools::load_all("StopoverCode", recompile = TRUE) # recompile true when first time loading on windows
 # this was replaced by 'StopoverCode' package, loaded with library
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
 
