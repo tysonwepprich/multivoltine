@@ -1,5 +1,13 @@
 # Boostrap with a likelihood ratio test to determine number of generations automatically
+# Steps:
+# Fit model with M=1 (or other null hypothesis)
+# Simulate bootstrap samples from MLE from model fit to null hypothesis
+# Fit model to bootstrap samples for M=1 and M=2 (or other alternative hypothesis)
+# Calculate log likelihood ratio statistic each time
 
+# Computing approach
+# Fit all potential null model(s) first using slurm cluster
+# bootstrap simulations wrapped in function for cluster/parallel
 
 
 # load libraries
@@ -7,19 +15,25 @@
 # setwd("stopover")
 # devtools::install_github("SESYNC-ci/rslurm")
 
-library(rslurm)
+# library(rslurm)
 library(devtools)
 library(msm)
 library(parallel)
 library(plyr)
 library(dplyr)
-# on Windows laptop, load_all works, not install.package
-# remove.packages('StopoverCode') # do this to rebuild after edits
-# install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
-# devtools::load_all("StopoverCode", recompile = TRUE)
+
+# Eleni's functions
 # this was replaced by 'StopoverCode' package, loaded with library
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
+
+# for linux/sesync cluster
+# remove.packages('StopoverCode') # do this to rebuild after edits
+# install.packages("StopoverCode", repos = NULL, type="source")
+# library(StopoverCode)
+
+# for windows laptop
+# load_all works, not install.package
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 # load data
 count_array <- readRDS('count_array_expanded.rds')
@@ -32,11 +46,8 @@ species_list <- readRDS('species_expanded.rds')
 # cov_sites <- readRDS('covariates_sites.2009.rds')
 # species_list_2009 <- readRDS('species.2009.rds')
 
-
-
 # choose parameter ranges
-nBoots <- 100 # bootstraps to perform for each parameter combination
-species <- 11 # corresponds to row in species_list
+species <- c(9:17) # corresponds to row in species_list
 raw_cutoff <- 10 # c(5, 10, 20) higher cutoff increases fit, decreases comp. time
 # Covariates for p (detection probability)
 # 7 matrices, already scaled
@@ -44,7 +55,7 @@ raw_cutoff <- 10 # c(5, 10, 20) higher cutoff increases fit, decreases comp. tim
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- "AnnGDD" # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- 1 # c(1, 2, 3) #number of broods to estimate
+M <- c(1:5) #number of broods to estimate
 
 # can't just use these in expand.grid, because "common" limits options of other params
 # what to do: find best covariate models first, then test against "common" 
@@ -58,10 +69,10 @@ sigma.m <- "het" #  c("het", "hom")
 phi.m <- "const" # c("const", "logit.a")
 
 params <- expand.grid(species, raw_cutoff, p_cov1, p_cov2, 
-                      site_covs, M, sigma.m, phi.m, nBoots,
+                      site_covs, M, sigma.m, phi.m,
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "raw_cutoff", "p_cov1", "p_cov2", 
-                   "site_covs", "M", "sigma.m", "phi.m", "nBoots")
+                   "site_covs", "M", "sigma.m", "phi.m")
 # params$nBoots <- nBoots
 
 # remove redundant parameter combos for detection, needed if p_cov1 and p_cov2 overlap
@@ -75,11 +86,8 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
-
 # slurm.apply function
-# now includes data prep, bootstrap site selection within function
-# Question for Eleni: should same bootstrap sites be used for 
-# different permutations of covariates to test them against each other?
+# fits each set of covariates once (multiple tries to find global LL)
 
 SlurmCovs <- function(nRun){
   # parameters
@@ -96,8 +104,6 @@ SlurmCovs <- function(nRun){
   #   mu.m <<- pars$mu.m
   sigma.m <<- pars$sigma.m
   phi.m <<- pars$phi.m
-  nBoots <<- pars$nBoots
-  
   
   ### data prep ###
   counts <- count_array[, , species] 
@@ -161,91 +167,33 @@ SlurmCovs <- function(nRun){
   cov.phi <<- ALLcov.phi
   qp <<- dim(cov.p)[3]
   
-  #########
-  # First fit model with all data, to use to get p-value from bootstrap likelihood ratio distribution
-  # Use different values of M
-  #########
-  orig <- list()
+  ####
+  out <- list()
   Tries <- 5
-  for (m in 1:5){
-    temp.fit <- list()
-    temp.ll <- rep(NA, Tries)
-    
-    for (k in 1:Tries){
-      start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
-      pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
-      temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
-      temp.ll[k] <- temp.fit[[k]]$ll.val
-    }
-    
-    if (length(which(is.na(temp.ll) == TRUE)) < Tries){
-      tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
-      temp <-temp.fit[[tempchoose]]
-    }else{
-      temp <- list()
-      temp$ll.val <- NA
-    }
-    
-    temp$time <- startTime - Sys.time()
-    temp$pars <- pars
-    temp$M <- m
-    orig[[m]] <- temp
+  temp.fit <- list()
+  temp.ll <- rep(NA, Tries)
+  
+  for (k in 1:Tries){
+    start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+    pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+    temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+    temp.ll[k] <- temp.fit[[k]]$ll.val
   }
   
-  bootFits = list()
-  # Bootstrap sites and fit model
-  bootIdxs = array(0, c(nBoots, dim(counts)[1]))
-  for (b in 1:nBoots){
-    bSites <- sample(dim(counts)[1], replace = TRUE)
-    startTime <- Sys.time()
-    
-    counts <<- ALLcounts[bSites, ]
-    cov.w <<- ALLcov.w[bSites]
-    cov.mu <<- ALLcov.mu[bSites]
-    cov.p <<- ALLcov.p[bSites, , , drop = FALSE]
-    qp <<- dim(cov.p)[3]
-    
-    ####
-    Tries <- 5
-    samples <- list()
-    for (m in 1:5){
-      temp.fit <- list()
-      temp.ll <- rep(NA, Tries)
-      
-      for (k in 1:Tries){
-        start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
-        pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
-        temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
-        temp.ll[k] <- temp.fit[[k]]$ll.val
-      }
-      
-      if (length(which(is.na(temp.ll) == TRUE)) < Tries){
-        tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll,na.rm=TRUE))])
-        temp <-temp.fit[[tempchoose]]
-      }else{
-        temp <- list()
-        temp$ll.val <- NA
-      }
-      
-      temp$time <- startTime - Sys.time()
-      temp$bSites <- bSites
-      temp$pars <- pars
-      temp$bootstrap <- b
-      temp$M <- m
-      samples[[m]] <- temp
-    }
-    
-    
-    
-    
+  if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+    tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+    temp <-temp.fit[[tempchoose]]
+  }else{
+    temp <- list()
+    temp$ll.val <- NA
   }
   
-  return(bootFits)
-  
-  
-  
+  temp$time <- startTime - Sys.time()
+  temp$pars <- pars
+  out[[1]] <- temp
   return(out)
 }
+
 
 # cl <- makeCluster(3)
 # clusterEvalQ(cl, {
@@ -259,8 +207,15 @@ SlurmCovs <- function(nRun){
 # stopCluster(cl)
 # 
 
-sjob1 <- slurm_apply(f = SlurmCovs, params = paramIN, 
+
+
+# calculate null hypotheses for M = 1:5 for different species
+baseline <- slurm_apply(f = SlurmCovs, params = paramIN, 
                      cpus_per_node = 8, nodes = 4, 
                      data_file = "dataIN.RData", 
                      # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                      output = "raw")
+
+
+
+
