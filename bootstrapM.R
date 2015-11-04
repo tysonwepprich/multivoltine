@@ -381,105 +381,122 @@ save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:length(SampleList)))
+paramIN <- data.frame(nRun = c(4000:4002))
+
 
 SlurmGeneration <- function(nRun){
+  out <- vector("list", length = 2)
   BSdata <- SampleList[[nRun]]
-  # parameters
-  pars <- BSdata$pars
-  species <- pars$species
-  raw_cutoff <- pars$raw_cutoff
-  p_cov1 <- pars$p_cov1
-  p_cov2 <- pars$p_cov2
-  site_covs <- pars$site_covs
-  M <<- pars$M
-  sigma.m <<- pars$sigma.m
-  phi.m <<- pars$phi.m
-  
-  ### data prep ###
-  counts <- count_array[, , species] 
-  
-  # select sites with enough individuals counted
-  siteRows <- which(rowSums(counts, na.rm = TRUE) >= raw_cutoff)
-  counts <- counts[siteRows, ]
-  counts[is.na(counts)] <- -1 #reassign NA for C program
-  ALLcounts <- counts # ALL distinguishes from bootstrapped counts
-  
-  S <<- dim(counts)[1] 
-  K <<- dim(counts)[2]  
-  TIME <<- dim(counts)[2]
-  
-  # covariates
-  # detection probability
-  covs <- c(p_cov1, p_cov2)
-  covs <- sort(as.numeric(covs[covs %in% as.character(c(1:7))]))
-  if (length(covs) == 0) {
-    p.m <<- "common" 
-    cov.p <- NA
-  } else {
+  if (is.na(BSdata$ll.val)){
+    out[[1]]$pars <- BSdata$pars
+    out[[1]]$ll.val <- NA
+    out[[2]] <- NULL
+  }else{
+    # parameters
+    pars <- BSdata$pars
+    species <- pars$species
+    raw_cutoff <- pars$raw_cutoff
+    p_cov1 <- pars$p_cov1
+    p_cov2 <- pars$p_cov2
+    site_covs <- pars$site_covs
+    M <<- pars$M
+    sigma.m <<- pars$sigma.m
+    phi.m <<- pars$phi.m
     p.m <<- "cov"
-    if (length(covs) > 1) cov.p <- cov_array[, , covs]
-    if (length(covs) == 1) cov.p <- array(data = cov_array[, , covs], dim = c(dim(cov_array[,,covs]), 1))
-    cov.p <- cov.p[siteRows, , , drop = FALSE]
-    # qp is the number of covariates for p
+    w.m <<- "cov"
+    mu.m <<- "cov"
+    ### data prep ###
+    counts <<- BSdata$simData$counts
+    
+    S <<- dim(counts)[1] 
+    K <<- dim(counts)[2]  
+    TIME <<- dim(counts)[2]
+    
+    p_cov <- BSdata$simData$p_cov
+    p_cov[which(counts == -1)] <- NA
+    
+    cov.p <- array(data = p_cov, dim = c(dim(p_cov), 1))
     qp <- dim(cov.p)[3]
     for(q in 1:qp) cov.p[,,q] <- scale(cov.p[,,q])[1:S,1:K]
     cov.p[is.na(cov.p)] <- -1
-  }
-  ALLcov.p <- cov.p
-  
-  
-  # Time (week) covariate for phi
-  cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))), S, K-1, byrow=TRUE) 
-  ALLcov.phi <- cov.phi
-  
-  # Site covariates for mu and weight of broods
-  if (site_covs == "common") {
-    s_cov <- NA
-    mu.m <<- "common"
-    w.m <<- "common"
-  }else{
-    mu.m <<- "cov"
-    w.m <<- "cov"
-    if (site_covs == "AnnGDD") s_cov <- scale(cov_sites$YearGDD)
-    if (site_covs == "SprGDD") s_cov <- scale(cov_sites$SpringGDD)
-    if (site_covs == "lat") s_cov <- scale(cov_sites$lat)
-    s_cov <- s_cov[siteRows]
-  }
-  ALLcov.w <- s_cov
-  ALLcov.mu <- s_cov
-  
-  startTime <- Sys.time()
-  
-  counts <<- ALLcounts
-  cov.w <<- ALLcov.w
-  cov.mu <<- ALLcov.mu
-  cov.p <<- ALLcov.p
-  cov.phi <<- ALLcov.phi
-  qp <<- dim(cov.p)[3]
-  
-  ####
-  out <- list()
-  Tries <- 5
-  temp.fit <- list()
-  temp.ll <- rep(NA, Tries)
-  
-  for (k in 1:Tries){
-    start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
-    pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
-    temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
-    temp.ll[k] <- temp.fit[[k]]$ll.val
-  }
-  
-  if (length(which(is.na(temp.ll) == TRUE)) < Tries){
-    tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
-    temp <-temp.fit[[tempchoose]]
-  }else{
-    temp <- list()
-    temp$ll.val <- NA
-  }
-  
-  temp$time <- startTime - Sys.time()
-  temp$pars <- pars
-  out[[1]] <- temp
+    ALLcov.p <- cov.p
+    
+    # Time (week) covariate for phi
+    cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))), S, K-1, byrow=TRUE) 
+    ALLcov.phi <- cov.phi
+    
+    s_cov <- scale(BSdata$simData$site_cov)
+    ALLcov.w <- s_cov
+    ALLcov.mu <- s_cov
+    
+    cov.w <<- ALLcov.w
+    cov.mu <<- ALLcov.mu
+    cov.p <<- ALLcov.p
+    cov.phi <<- ALLcov.phi
+    qp <<- dim(cov.p)[3]
+    
+    
+    ####
+    # Fit null hypothesis for M
+    Tries <- 5
+    temp.fit <- list()
+    temp.ll <- rep(NA, Tries)
+    startTime <- Sys.time()
+    
+    for (k in 1:Tries){
+      start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+      pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+      temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+      temp.ll[k] <- temp.fit[[k]]$ll.val
+    }
+    
+    if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+      tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+      temp <-temp.fit[[tempchoose]]
+    }else{
+      temp <- list()
+      temp$ll.val <- NA
+    }
+    temp$model <- "null"
+    temp$time <- startTime - Sys.time()
+    temp$pars <- pars
+    out[[1]] <- temp
+    
+    # Fit alternative model
+    M <<- M + 1
+    Tries <- 5
+    temp.fit <- list()
+    temp.ll <- rep(NA, Tries)
+    startTime <- Sys.time()
+    
+    for (k in 1:Tries){
+      start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+      pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+      temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+      temp.ll[k] <- temp.fit[[k]]$ll.val
+    }
+    
+    if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+      tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+      temp <-temp.fit[[tempchoose]]
+    }else{
+      temp <- list()
+      temp$ll.val <- NA
+    }
+    temp$model <- "alt"
+    temp$time <- startTime - Sys.time()
+    temp$pars <- pars
+    out[[2]] <- temp
+  } #close ifelse
   return(out)
 }
+
+
+
+# calculate null hypotheses for M = 1:5 for different species
+altM <- slurm_apply(f = SlurmGeneration, params = paramIN, 
+                        cpus_per_node = 8, nodes = 6, 
+                        data_file = "dataIN.RData", 
+                        # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                        output = "raw")
+
