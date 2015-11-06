@@ -240,13 +240,14 @@ for (i in 1:length(outList)){
 }
 
 outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
 
 # what to do about ll.val == NA for M = 1?
 nsim <- 100
 SampleList <- vector("list", length = length(slurm_out)*nsim)
-
+# make bootstrap data simulations for each model x 100
 for (bs in 1:length(SampleList)){
-  mod <- (bs + nsim - 1) %/% nsim
+  mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
   nullFit <- slurm_out[[mod]]
   # building output list
   SampleList[[bs]]$pars <- nullFit$pars
@@ -381,15 +382,15 @@ save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:length(SampleList)))
-paramIN <- data.frame(nRun = c(4000:4002))
 
-
+# Fit models for null and alternative (M + 1) for each simulated dataset
 SlurmGeneration <- function(nRun){
   out <- vector("list", length = 2)
   BSdata <- SampleList[[nRun]]
   if (is.na(BSdata$ll.val)){
     out[[1]]$pars <- BSdata$pars
     out[[1]]$ll.val <- NA
+    out[[1]]$nRun <- nRun
     out[[2]] <- NULL
   }else{
     # parameters
@@ -461,6 +462,7 @@ SlurmGeneration <- function(nRun){
     temp$time <- startTime - Sys.time()
     temp$pars <- pars
     out[[1]] <- temp
+    out[[1]]$nRun <- nRun
     
     # Fit alternative model
     M <<- M + 1
@@ -487,6 +489,7 @@ SlurmGeneration <- function(nRun){
     temp$time <- startTime - Sys.time()
     temp$pars <- pars
     out[[2]] <- temp
+    out[[2]]$nRun <- nRun
   } #close ifelse
   return(out)
 }
@@ -494,9 +497,115 @@ SlurmGeneration <- function(nRun){
 
 
 # calculate null hypotheses for M = 1:5 for different species
-altM <- slurm_apply(f = SlurmGeneration, params = paramIN, 
-                        cpus_per_node = 8, nodes = 6, 
+alt <- slurm_apply(f = SlurmGeneration, params = paramIN, 
+                        cpus_per_node = 8, nodes = 12, 
                         data_file = "dataIN.RData", 
                         # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                         output = "raw")
+
+
+test2 <- get_slurm_out(alt)
+# finding results when you clear the workspace and get_slurm_out no longer works
+slurm_codes <- c("slr2747")
+slurm_out <- list()
+
+for (j in 1:length(slurm_codes)){
+  missing_files <- c()
+  tmpEnv <- new.env()
+  for (i in 4) {
+    fname <- paste0(slurm_codes[j], "_", i, 
+                    ".RData")
+    if (fname %in% dir()) {
+      load(fname, envir = tmpEnv)
+      slurm_out <- c(slurm_out, get(".rslurm_result", 
+                                    envir = tmpEnv))
+    }
+    else {
+      missing_files <- c(missing_files, fname)
+    }
+  }
+}
+
+
+
+####PROBLEM: output list has 2 components, each needed to be collapsed into a row in outDF
+# many cases where M=1 doesn't work but M=2 does for same bootstrap sample
+
+####NEW PROBLEM: some output in list of 1, but model still fit for null and alt, but retrieved
+# in 2 separate lists. Now have slurm_out elements with length 1, 2, or 22!
+
+outList <- slurm_out
+outDF <- data.frame()
+for (i in 1:length(outList)){
+  for (j in 1:length(outList[[i]])){
+    species <- outList[[i]][[j]]$pars$species
+    nRun <- outList[[i]][[j]]$nRun
+    ll.val <- outList[[i]][[j]]$ll.val
+    if (is.na(ll.val)){
+      npar <- NA
+      M <- outList[[i]][[j]]$pars$M
+      model <- NA
+    }else{
+      npar <- outList[[i]][[j]]$npar
+      M <- dim(outList[[i]][[j]]$mu.est)[2]
+      model <- outList[[i]][[j]]$model
+    }
+    outDF <- rbind(outDF, data.frame(species, nRun, M, model, ll.val, npar))
+  }
+}
+BSmods <- outDF
+
+
+# for output that unexpectedly separated elements into 2 lists of 22, instead of 1 list of 2
+outList <- slurm_out
+outDF <- data.frame()
+for (i in 1:length(outList)){
+    species <- outList[[i]]$pars$species
+    nRun <- outList[[i]]$nRun
+    ll.val <- outList[[i]]$ll.val
+    if (is.na(ll.val)){
+      npar <- NA
+      M <- outList[[i]]$pars$M
+      model <- NA
+    }else{
+      npar <- outList[[i]]$npar
+      M <- dim(outList[[i]]$mu.est)[2]
+      model <- outList[[i]]$model
+    }
+    outDF <- rbind(outDF, data.frame(species, nRun, M, model, ll.val, npar))
+  }
+
+BSmods <- outDF
+
+
+
+# from output, calculate 
+# -2loglambda for each bootstrap data sample
+# compare to -2loglambda from models fit to all data
+# to derive p-value based on
+# alpha = 1 - j / (B+1)
+
+nullM <- 2
+spec <- 17
+origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
+origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% select(ll.val)
+BStests <- BSmods %>% filter(species == spec) %>% 
+  filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt")
+
+LRdistr <- BStests %>% group_by(nRun) %>%
+  summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
+B <- nrow(LRdistr)
+# alpha <- 0.05
+origLR <- 2 * (origAlt - origNull)
+j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
+P <- 1 - (3 * j - 1) / (3 * B + 1)
+
+# if P > alpha, alternative hypothesis is better
+
+# species 11, getting some runs where null has slightly lower deviance than alternative
+# this causes negative values of neg2logLam, which should be impossible
+
+
+
+
 
