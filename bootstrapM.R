@@ -222,9 +222,9 @@ baseline <- slurm_apply(f = SlurmCovs, params = paramIN,
 
 # slurm_out <- get_slurm_out(baseline)
 # saveRDS(slurm_out, "baselineMtest.rds")
-slurm_out <- readRDS("baselineMtest.rds")
+base_out <- readRDS("baselineMtest.rds")
 
-outList <- slurm_out
+outList <- base_out
 outDF <- list()
 for (i in 1:length(outList)){
   out <- outList[[i]]$pars
@@ -512,7 +512,7 @@ slurm_out <- list()
 for (j in 1:length(slurm_codes)){
   missing_files <- c()
   tmpEnv <- new.env()
-  for (i in 4) {
+  for (i in 0:11) {
     fname <- paste0(slurm_codes[j], "_", i, 
                     ".RData")
     if (fname %in% dir()) {
@@ -526,40 +526,35 @@ for (j in 1:length(slurm_codes)){
   }
 }
 
-
-
+test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 ####PROBLEM: output list has 2 components, each needed to be collapsed into a row in outDF
 # many cases where M=1 doesn't work but M=2 does for same bootstrap sample
 
 ####NEW PROBLEM: some output in list of 1, but model still fit for null and alt, but retrieved
-# in 2 separate lists. Now have slurm_out elements with length 1, 2, or 22!
+# in 2 separate lists. Now have slurm_out elements with length 1, 2, 5 or 22!
 
 outList <- slurm_out
 outDF <- data.frame()
 for (i in 1:length(outList)){
-  for (j in 1:length(outList[[i]])){
-    species <- outList[[i]][[j]]$pars$species
-    nRun <- outList[[i]][[j]]$nRun
-    ll.val <- outList[[i]][[j]]$ll.val
-    if (is.na(ll.val)){
-      npar <- NA
-      M <- outList[[i]][[j]]$pars$M
-      model <- NA
-    }else{
-      npar <- outList[[i]][[j]]$npar
-      M <- dim(outList[[i]][[j]]$mu.est)[2]
-      model <- outList[[i]][[j]]$model
+  # expected format length 2
+  if (length(outList[[i]]) %in% c(1,2)){
+    for (j in 1:length(outList[[i]])){
+      species <- outList[[i]][[j]]$pars$species
+      nRun <- outList[[i]][[j]]$nRun
+      ll.val <- outList[[i]][[j]]$ll.val
+      if (is.na(ll.val)){
+        npar <- NA
+        M <- outList[[i]][[j]]$pars$M
+        model <- NA
+      }else{
+        npar <- outList[[i]][[j]]$npar
+        M <- dim(outList[[i]][[j]]$mu.est)[2]
+        model <- outList[[i]][[j]]$model
+      }
+      outDF <- rbind(outDF, data.frame(species, nRun, M, model, ll.val, npar))
     }
-    outDF <- rbind(outDF, data.frame(species, nRun, M, model, ll.val, npar))
   }
-}
-BSmods <- outDF
-
-
-# for output that unexpectedly separated elements into 2 lists of 22, instead of 1 list of 2
-outList <- slurm_out
-outDF <- data.frame()
-for (i in 1:length(outList)){
+  if (length(outList[[i]]) %in% c(5, 22)){
     species <- outList[[i]]$pars$species
     nRun <- outList[[i]]$nRun
     ll.val <- outList[[i]]$ll.val
@@ -574,7 +569,7 @@ for (i in 1:length(outList)){
     }
     outDF <- rbind(outDF, data.frame(species, nRun, M, model, ll.val, npar))
   }
-
+}
 BSmods <- outDF
 
 
@@ -585,27 +580,44 @@ BSmods <- outDF
 # to derive p-value based on
 # alpha = 1 - j / (B+1)
 
-nullM <- 2
-spec <- 17
-origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
-origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% select(ll.val)
-BStests <- BSmods %>% filter(species == spec) %>% 
-  filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt")
 
-LRdistr <- BStests %>% group_by(nRun) %>%
-  summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
-B <- nrow(LRdistr)
-# alpha <- 0.05
-origLR <- 2 * (origAlt - origNull)
-j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
-P <- 1 - (3 * j - 1) / (3 * B + 1)
-
+BSpval <- function(nullM, spec){
+  nullM <- nullM
+  spec <- spec
+  origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
+  origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% select(ll.val)
+  # problem when null mod generally doesn't fit, many alternative mods do
+  
+  BStests <- BSmods %>% filter(species == spec) %>% 
+    filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt") %>%
+    group_by(nRun) %>% mutate(NumSuccess = length(ll.val)) %>%
+    filter(NumSuccess == 2)
+  
+#   if (length(which(BStests$model == "null")) < length(which(BStests$model == "alt"))){
+#     
+#   }
+  
+  LRdistr <- BStests %>% group_by(nRun) %>%
+    summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
+  B <- nrow(LRdistr)
+  # alpha <- 0.05
+  origLR <- 2 * (origAlt - origNull)
+  j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
+  P <- 1 - (3 * j - 1) / (3 * B + 1)
+  return(P)
+}
 # if P > alpha, alternative hypothesis is better
 
 # species 11, getting some runs where null has slightly lower deviance than alternative
 # this causes negative values of neg2logLam, which should be impossible
 
+expand.grid.alt <- function(seq1,seq2) {
+  cbind(rep.int(seq1, length(seq2)),
+        c(t(matrix(rep.int(seq2, length(seq1)), nrow=length(seq2)))))
+}
 
-
+parsIN <- data.frame(expand.grid.alt(c(1:4), unique(BSmods$species)))
+names(parsIN) <- c("nullM", "spec")
+Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec))
 
 
