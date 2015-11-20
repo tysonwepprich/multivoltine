@@ -16,12 +16,12 @@ species_list <- readRDS('species_expanded.rds')
 # species_list_2009 <- readRDS('species.2009.rds')
 
 # choose parameter ranges
-species <- c(6, 20, 21, 23, 25, 27, 30, 31, 32, 33, 34) # corresponds to row in species_list
+species <- c(6, 20, 25, 27, 30, 32) # corresponds to row in species_list
 raw_cutoff <- 10 
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- "AnnGDD" # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- c(1, 1, 1, 2, 3) #number of broods to estimate
+M <- c(3, 4) #number of broods to estimate
 sigma.m <- "het" #  c("het", "hom")
 phi.m <- "const" # c("const", "logit.a")
 
@@ -40,12 +40,12 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 # calculate null hypotheses for M for different species
 baseline <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                        cpus_per_node = 8, nodes = 4, 
+                        cpus_per_node = 8, nodes = 2, 
                         data_file = "dataIN.RData", 
                         # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                         output = "raw")
 
-slurm_codes <- c("slr3668")
+slurm_codes <- c("slr3096")
 slurm_out <- list()
 
 for (j in 1:length(slurm_codes)){
@@ -83,11 +83,14 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
+# saveRDS(baselineDF, file = "baseline3v4.rds")
 
 
 # select M=2 to simulate data (to test vs. M = 3)
-index <- which(baselineDF$M == 2)
+# for M 3v4, remove SSSkip, too long to run
+index <- which(baselineDF$M == 3 & baselineDF$species != 6)
 slurm_out <- slurm_out[c(index)]
+
 
 
 # what to do about ll.val == NA for M = 1?
@@ -239,7 +242,7 @@ alt <- slurm_apply(f = SlurmGeneration, params = paramIN,
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
-slurm_codes <- c("slr842")
+slurm_codes <- c("slr4213")
 slurm_out <- list()
 
 for (j in 1:length(slurm_codes)){
@@ -303,9 +306,9 @@ for (i in 1:length(outList)){
 BSmods <- outDF
 
 
-
-parsIN <- data.frame(expand.grid.alt(c(2), unique(BSmods$species)))
+baselineDF <- readRDS("baseline3v4.rds")
+parsIN <- data.frame(expand.grid.alt(c(3), unique(BSmods$species)))
 names(parsIN) <- c("nullM", "spec")
 Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec)) %>% data.frame()
-
-
+# saveRDS(Mtest, file = "Mtest2v3.rds")
+saveRDS(Mtest, file = "Mtest3v4.rds")
