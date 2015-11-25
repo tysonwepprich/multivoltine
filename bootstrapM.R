@@ -55,7 +55,7 @@ raw_cutoff <- 10 # c(5, 10, 20) higher cutoff increases fit, decreases comp. tim
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- "AnnGDD" # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- c(1:5) #number of broods to estimate
+M <- c(1, 1, 1) # c(1:5) #number of broods to estimate
 
 # can't just use these in expand.grid, because "common" limits options of other params
 # what to do: find best covariate models first, then test against "common" 
@@ -216,13 +216,21 @@ baseline <- slurm_apply(f = SlurmCovs, params = paramIN,
                      # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                      output = "raw")
 
-
+# calculate null hypotheses for M = 1 for different species
+# got a lot of LL.val = NA for M = 1 the first time through, limits p-value
+# this is just to test if more tries means its possible to fit
+baseline1M <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                        cpus_per_node = 8, nodes = 2, 
+                        data_file = "dataIN.RData", 
+                        # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                        output = "raw")
 
 # simulation of sample from MLE parameters for each species/M hypothesis
 
 # slurm_out <- get_slurm_out(baseline)
 # saveRDS(slurm_out, "baselineMtest.rds")
 base_out <- readRDS("baselineMtest.rds")
+# base1_out <- get_slurm_out(baseline1M)
 
 outList <- base_out
 outDF <- list()
@@ -603,7 +611,8 @@ BSpval <- function(nullM, spec){
   # alpha <- 0.05
   origLR <- 2 * (origAlt - origNull)
   j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
-  P <- 1 - (3 * j - 1) / (3 * B + 1)
+  # P <- 1 - (3 * j - 1) / (3 * B + 1)
+  P <- 1 - j / (B + 1)
   return(P)
 }
 # if P > alpha, alternative hypothesis is better
@@ -618,6 +627,6 @@ expand.grid.alt <- function(seq1,seq2) {
 
 parsIN <- data.frame(expand.grid.alt(c(1:4), unique(BSmods$species)))
 names(parsIN) <- c("nullM", "spec")
-Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec))
-
+Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec)) %>% data.frame()
+# saveRDS(Mtest, file = "MtestTry1.rds")
 
