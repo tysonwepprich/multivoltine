@@ -1,4 +1,4 @@
-# abbreviated version of bootstrampM.R
+# abbreviated version of bootstrapM.R
 # run one M null hypothesis at a time, to prevent unnecessary computation
 
 source('bootstrapMfunctions.R')

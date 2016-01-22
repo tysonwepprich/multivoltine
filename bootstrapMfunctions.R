@@ -20,11 +20,11 @@ library(data.table)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
+# library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-# devtools::load_all("StopoverCode", recompile = TRUE)
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Data prep function, input CommonName
@@ -41,7 +41,7 @@ SpeciesData <- function(species){
   # data <- data[, list(SeqID, SiteID.x, SiteDate, Week, Total, CheckListKey, CommonName)]
   setnames(data,"SiteID.x","SiteID")
   data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
-  data[, SiteDate := ymd(as.character(SiteDate))]
+  data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
   
   data[, Year := year(SiteDate)]
   data[, `:=` (WeekPerYear = length(unique(Week)),
@@ -52,6 +52,28 @@ SpeciesData <- function(species){
   surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
   
   dat <- dat[CommonName == species][Year >= 1998]
+  
+  #Site covariates for mu, weights
+  #GDD from Dan (or maybe Leslie/Rick Reeves?)
+  gdd <- fread("data/GddResultsAllSites_1996_2012.csv")
+  names(gdd)[1] <- "SiteID"
+  gdd$SiteID <- formatC(gdd$SiteID, width = 3, format = "d", flag = "0")
+  gdd$Date <- parse_date(gdd$full_date, format = "%m/%d/%Y")
+  gdd$Year <- year(gdd$Date)
+  gdd_summary <- gdd %>%
+    filter(todayGDD >= 0) %>%
+    group_by(SiteID, Year) %>%
+    summarise(YearGDD = max(GDD),
+              SpringGDD = max(GDD[ordinalEndDayOfYear < 100], na.rm = TRUE), #negative infinity popping up????
+              SummerGDD = max(GDD[ordinalEndDayOfYear < 200], na.rm = TRUE),
+              FallGDD = max(GDD[ordinalEndDayOfYear < 300], na.rm = TRUE))
+  
+  gdd_summary[SpringGDD == -Inf]$SpringGDD <- NA
+  
+  
+  sites <- read_csv("data/OHsites_reconciled.csv")
+  names(sites)[1] <- "SiteID"
+  sites$SiteID <- formatC(sites$SiteID, width = 3, format = "d", flag = "0")
   
   years <- sort(unique(dat$Year))
   dat_list <- as.list(years)
@@ -141,32 +163,12 @@ SpeciesData <- function(species){
     
     dat_list[[i]]$surv_covs <- cov_array
     
-    #Site covariates for mu, weights
-    #GDD from Dan (or maybe Leslie/Rick Reeves?)
-    gdd <- fread("data/GddResultsAllSites_1996_2012.csv")
-    names(gdd)[1] <- "SiteID"
-    gdd$SiteID <- formatC(gdd$SiteID, width = 3, format = "d", flag = "0")
-    gdd$Date <- mdy(gdd$full_date)
-    gdd$Year <- year(gdd$Date)
-    gdd_summary <- gdd %>%
-      filter(todayGDD >= 0) %>%
-      group_by(SiteID, Year) %>%
-      summarise(YearGDD = max(GDD),
-                SpringGDD = max(GDD[ordinalEndDayOfYear < 100], na.rm = TRUE), #negative infinity popping up????
-                SummerGDD = max(GDD[ordinalEndDayOfYear < 200], na.rm = TRUE),
-                FallGDD = max(GDD[ordinalEndDayOfYear < 300], na.rm = TRUE))
-    
-    gdd_summary[SpringGDD == -Inf]$SpringGDD <- NA
+
     
     #spring and yearly GDD have lowest correlation, but still .62.
     gdd_covs <- gdd_summary[Year == yr]
     
-    sites <- read_csv("data/OHsites_reconciled.csv")
-    names(sites)[1] <- "SiteID"
-    sites$SiteID <- formatC(sites$SiteID, width = 3, format = "d", flag = "0")
-    
     cov_sites <- merge(sites, gdd_covs, by = "SiteID", all.x = TRUE)
-    cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(surveys$SiteID)), ]
     
     # gdd missing from Catawba Island 103
     # use gdd from closest other site
@@ -174,9 +176,14 @@ SpeciesData <- function(species){
     rowNA <- which(is.na(cov_sites$SpringGDD))
     d <- dist(cbind(cov_sites$lat, cov_sites$lon), upper = TRUE)
     dists <- as.matrix(d)[rowNA,]
-    mindist <- min(dists[dists > 0])
-    rowReplace <- which(dists == mindist)
-    cov_sites[rowNA, c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+    dists[which(dists == 0)] <- NA
+    mindist <- apply(dists, 1, min, na.rm = TRUE)
+    for (md in 1:length(rowNA)){
+      rowReplace <- which(dists[md, ] == mindist[md])
+      cov_sites[rowNA[md], c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+    }
+
+    cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(survs$SiteID)), ]
     
     dat_list[[i]]$site_covs <- cov_sites
     
@@ -192,6 +199,7 @@ SlurmCovs <- function(nRun){
   # is <<- necessary so inner functions can find all these?
   pars <- params[nRun, ]
   species <- pars$species
+  list_index <- pars$list_index
   raw_cutoff <- pars$raw_cutoff
   p_cov1 <- pars$p_cov1
   p_cov2 <- pars$p_cov2
@@ -204,10 +212,14 @@ SlurmCovs <- function(nRun){
   phi.m <<- pars$phi.m
   
   ### data prep ###
-  counts <- count_array[, , species] 
+  temp <- dat[[list_index]]
+  year <- temp[[1]]
+  counts <- temp$counts
   
   # select sites with enough individuals counted
   siteRows <- which(rowSums(counts, na.rm = TRUE) >= raw_cutoff)
+  surv_present <- which(apply(counts, 1, function(x) length(which(x > 0))) >= 3)
+  siteRows <- siteRows[which(siteRows %in% surv_present)]
   counts <- counts[siteRows, ]
   counts[is.na(counts)] <- -1 #reassign NA for C program
   ALLcounts <- counts # ALL distinguishes from bootstrapped counts
@@ -217,6 +229,7 @@ SlurmCovs <- function(nRun){
   TIME <<- dim(counts)[2]
   
   # covariates
+  cov_array <- temp$surv_covs
   # detection probability
   covs <- c(p_cov1, p_cov2)
   covs <- sort(as.numeric(covs[covs %in% as.character(c(1:7))]))
@@ -240,6 +253,7 @@ SlurmCovs <- function(nRun){
   cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))), S, K-1, byrow=TRUE) 
   ALLcov.phi <- cov.phi
   
+  cov_sites <- temp$site_covs
   # Site covariates for mu and weight of broods
   if (site_covs == "common") {
     s_cov <- NA

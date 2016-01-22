@@ -20,24 +20,8 @@ SpeciesData <- function(species){
   dat <- data[WeekPerYear >= 15]
   
   surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
-  # surveys <- surveys[year(SiteDate) == yr]
   
-  # 
-  # #select top species for dataset
-  # SpeciesNum <- dat %>%
-  #   group_by(CommonName) %>%
-  #   summarise(Present = length(Total)) %>%
-  #   arrange(-Present) %>%
-  #   data.frame()
-  # 
-  # SpeciesList <- SpeciesNum[-grep("Unidentified", SpeciesNum$CommonName, fixed = TRUE), ]
-  # SpeciesList <- SpeciesList[-which(SpeciesList$CommonName == "None seen this day"), ]
-  # SpeciesList <- filter(SpeciesList, Present > 50)
-  # saveRDS(SpeciesList, paste("species", yr, "rds", sep = "."))
-  
-  
-  # dat <- dat[CommonName %in% SpeciesList$CommonName]
-  dat <- dat[CommonName == "Peck's Skipper"][Year >= 1999]
+  dat <- dat[CommonName == species][Year >= 1999]
   
   test <- merge(surveys, dat, by = c("SiteID", "SiteDate", "Week", "SeqID", "Year"), all.x = TRUE)
   test$Total <- mapvalues(test[,Total], from = NA, to = 0)
