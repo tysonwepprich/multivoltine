@@ -6,6 +6,12 @@ library(msm)
 library(parallel)
 library(plyr)
 library(dplyr)
+library(tidyr)
+library(readr)
+library(reshape)
+library(reshape2)
+library(data.table)
+
 
 # Eleni's functions
 # this was replaced by 'StopoverCode' package, loaded with library
@@ -14,13 +20,176 @@ library(dplyr)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
+# library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-# devtools::load_all("StopoverCode", recompile = TRUE)
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 
+# Data prep function, input CommonName
+# Output list of counts, survey covariates, and site covariates for each year 1998-2012
+SpeciesData <- function(species){
+  # Array of species counts (1 species x sites x years)
+  # Covariate array to match
+  
+  ##########
+  #DATA PREP
+  ##########
+  
+  data <- fread("data/data.trim.csv", header = TRUE)
+  # data <- data[, list(SeqID, SiteID.x, SiteDate, Week, Total, CheckListKey, CommonName)]
+  setnames(data,"SiteID.x","SiteID")
+  data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
+  data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
+  
+  data[, Year := year(SiteDate)]
+  data[, `:=` (WeekPerYear = length(unique(Week)),
+               SurvPerYear = length(unique(SeqID))), 
+       by = list(SiteID, Year)]
+  dat <- data[WeekPerYear >= 15]
+  
+  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
+  
+  dat <- dat[CommonName == species][Year >= 1998]
+  
+  #Site covariates for mu, weights
+  #GDD from Dan (or maybe Leslie/Rick Reeves?)
+  gdd <- fread("data/GddResultsAllSites_1996_2012.csv")
+  names(gdd)[1] <- "SiteID"
+  gdd$SiteID <- formatC(gdd$SiteID, width = 3, format = "d", flag = "0")
+  gdd$Date <- parse_date(gdd$full_date, format = "%m/%d/%Y")
+  gdd$Year <- year(gdd$Date)
+  gdd_summary <- gdd %>%
+    filter(todayGDD >= 0) %>%
+    group_by(SiteID, Year) %>%
+    summarise(YearGDD = max(GDD),
+              SpringGDD = max(GDD[ordinalEndDayOfYear < 100], na.rm = TRUE), #negative infinity popping up????
+              SummerGDD = max(GDD[ordinalEndDayOfYear < 200], na.rm = TRUE),
+              FallGDD = max(GDD[ordinalEndDayOfYear < 300], na.rm = TRUE))
+  
+  gdd_summary[SpringGDD == -Inf]$SpringGDD <- NA
+  
+  
+  sites <- read_csv("data/OHsites_reconciled.csv")
+  names(sites)[1] <- "SiteID"
+  sites$SiteID <- formatC(sites$SiteID, width = 3, format = "d", flag = "0")
+  
+  years <- sort(unique(dat$Year))
+  dat_list <- as.list(years)
+  for (i in 1:length(dat_list)){
+    
+    yr <- years[i]
+    spdat <- dat[Year == yr]
+    spdat <- unique(spdat)
+    #   setkey(spdat, SeqID)
+    
+    survs <- surveys[year(SiteDate) == yr]
+    #Add zeros to surveys when species not counted during a survey
+    
+    test <- merge(survs, spdat, by = c("SiteID", "SiteDate", "Week", "SeqID", "Year"), all.x = TRUE)
+    counts <- test[, c("SiteID", "SiteDate", "Week", "SeqID", "Total", "Year"), with = FALSE]
+    counts$Total <- mapvalues(counts[,Total], from = NA, to = 0)
+    
+    #overachieving volunteers going out more than once a week!
+    #choose first one, not averaging, easier to match with covariates
+    counts_uniq <- counts %>% 
+      group_by(SiteID, Week) %>%
+      arrange(SiteDate) %>%
+      summarise(Total = Total[1])
+    
+    count_matrix <- as.matrix(cast(counts_uniq, SiteID ~ Week, value = "Total"))
+    count_matrix <- round(count_matrix)
+    count_matrix[is.na(count_matrix)] <- NA
+    
+    dat_list[[i]]$counts <- count_matrix
+    
+    
+    #covariates
+    
+    #some already calculated in OHdetprob.RMD
+    #what to do about NA's in covariates?
+    oldcovs <- fread("data/survey.covariates.csv")
+    covs <- merge(survs, oldcovs, by = "SeqID", all.x = TRUE)
+    
+    #Celsius-Fahrenheit issues
+    covs[mean.temp < 45]$mean.temp <- covs[mean.temp < 45]$mean.temp * 1.8 + 32
+    
+    #overachieving volunteers going out more than once a week!
+    #choose first one, not averaging, to match with counts
+    covs <- covs %>% 
+      group_by(SiteID, Week) %>%
+      arrange(SiteDate) %>%
+      mutate(Duplicate = 1:length(SeqID)) %>%
+      filter(Duplicate == 1)
+    
+    surv <- survs %>%
+      group_by(SiteID, Week) %>%
+      arrange(SiteDate) %>%
+      summarise(SiteDate = SiteDate[1])
+    
+    covs <- merge(surv, covs, by = c("SiteID", "Week", "SiteDate"), all.x = TRUE)
+    
+    # some NA's, not more than 30 for covariates
+    # just assign them as mean (even though not perfect for seasonal variables)
+    covs <- data.frame(covs)
+    for(j in 6:ncol(covs)){
+      covs[is.na(covs[,j]), j] <- mean(covs[,j], na.rm = TRUE)
+    }
+    
+    covs$Ztemp <- poly(covs$mean.temp, 2)[, 1]
+    covs$Ztemp2 <- poly(covs$mean.temp, 2)[, 2]
+    covs$Zwind <- scale(covs$mean.wind)
+    covs$Zcloud <- scale(covs$mean.cloud)
+    covs$Zduration <- scale(covs$duration)
+    covs$Zhour <- scale(covs$start.hour)
+    covs$Zspecies <- scale(covs$num.species)
+    
+    # new idea for phi, include ordinal day for time/age standard instead of week
+    covs$Zjulian <- scale(yday(covs$SiteDate))
+    
+    #cast covs as matrix, so NA's inserted for missing surveys
+    cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 8))
+    
+    cov_molten <- melt(covs, id = c("SiteID", "Week", "SiteDate"))
+    cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp", ], SiteID ~ Week, value = "value"))
+    cov_array[,,2] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp2", ], SiteID ~ Week, value = "value"))
+    cov_array[,,3] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zwind", ], SiteID ~ Week, value = "value"))
+    cov_array[,,4] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zcloud", ], SiteID ~ Week, value = "value"))
+    cov_array[,,5] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zduration", ], SiteID ~ Week, value = "value"))
+    cov_array[,,6] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zhour", ], SiteID ~ Week, value = "value"))
+    cov_array[,,7] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ], SiteID ~ Week, value = "value"))
+    cov_array[,,8] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zjulian", ], SiteID ~ Week, value = "value"))
+    
+    dat_list[[i]]$surv_covs <- cov_array
+    
+
+    
+    #spring and yearly GDD have lowest correlation, but still .62.
+    gdd_covs <- gdd_summary[Year == yr]
+    
+    cov_sites <- merge(sites, gdd_covs, by = "SiteID", all.x = TRUE)
+    
+    # gdd missing from Catawba Island 103
+    # use gdd from closest other site
+    # Turn this into a function!
+    rowNA <- which(is.na(cov_sites$SpringGDD))
+    d <- dist(cbind(cov_sites$lat, cov_sites$lon), upper = TRUE)
+    dists <- as.matrix(d)[rowNA,]
+    dists[which(dists == 0)] <- NA
+    mindist <- apply(dists, 1, min, na.rm = TRUE)
+    for (md in 1:length(rowNA)){
+      rowReplace <- which(dists[md, ] == mindist[md])
+      cov_sites[rowNA[md], c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+    }
+
+    cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(survs$SiteID)), ]
+    
+    dat_list[[i]]$site_covs <- cov_sites
+    
+  }
+  return(dat_list)
+}
 
 # slurm.apply function
 # fits each set of covariates once (multiple tries to find global LL)
@@ -30,6 +199,7 @@ SlurmCovs <- function(nRun){
   # is <<- necessary so inner functions can find all these?
   pars <- params[nRun, ]
   species <- pars$species
+  list_index <- pars$list_index
   raw_cutoff <- pars$raw_cutoff
   p_cov1 <- pars$p_cov1
   p_cov2 <- pars$p_cov2
@@ -42,10 +212,14 @@ SlurmCovs <- function(nRun){
   phi.m <<- pars$phi.m
   
   ### data prep ###
-  counts <- count_array[, , species] 
+  temp <- dat[[list_index]]
+  year <- temp[[1]]
+  counts <- temp$counts
   
   # select sites with enough individuals counted
   siteRows <- which(rowSums(counts, na.rm = TRUE) >= raw_cutoff)
+  surv_present <- which(apply(counts, 1, function(x) length(which(x > 0))) >= 3)
+  siteRows <- siteRows[which(siteRows %in% surv_present)]
   counts <- counts[siteRows, ]
   counts[is.na(counts)] <- -1 #reassign NA for C program
   ALLcounts <- counts # ALL distinguishes from bootstrapped counts
@@ -55,6 +229,7 @@ SlurmCovs <- function(nRun){
   TIME <<- dim(counts)[2]
   
   # covariates
+  cov_array <- temp$surv_covs
   # detection probability
   covs <- c(p_cov1, p_cov2)
   covs <- sort(as.numeric(covs[covs %in% as.character(c(1:7))]))
@@ -78,6 +253,7 @@ SlurmCovs <- function(nRun){
   cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))), S, K-1, byrow=TRUE) 
   ALLcov.phi <- cov.phi
   
+  cov_sites <- temp$site_covs
   # Site covariates for mu and weight of broods
   if (site_covs == "common") {
     s_cov <- NA

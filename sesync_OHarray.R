@@ -25,7 +25,7 @@ library(reshape2)
 ##########
 #DATA PREP
 ##########
-yr <- 2009
+yr <- 2010
 
 # setwd("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012")
 data <- fread("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/data.trim.csv", header = TRUE)
@@ -136,7 +136,7 @@ covs$Zspecies <- scale(covs$num.species)
 covs$Zjulian <- scale(yday(covs$SiteDate))
 
 #cast covs as matrix, so NA's inserted for missing surveys
-cov_array <- array(, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 8))
+cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 8))
 
 cov_molten <- melt(covs, id = c("SiteID", "Week", "SiteDate"))
 cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp", ], SiteID ~ Week, value = "value"))
