@@ -3,21 +3,24 @@
 
 # also should extract needed data from output from non-slurm SlurvCov analysis
 
+allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
 # i <- 16 #slr4158
 # i <- 15 #slr7296
 # i <- 14 #slr7389
-# i <- 13 #slr1826
+i <- 13 #slr1826
 # i <- 12 #slr1965
 # i <- 10 #slr2023
 # i <- 2 #slr2085
 # i <- 3 #slr2152
 
 
+
 # extract data from SlurmCov results
-slurm_codes <- c("slr4158")
+slurm_codes <- c("slr1826")
 slurm_out <- list()
+setwd("slurmCovOutput/sesyncResults")
 
 for (j in 1:length(slurm_codes)){
   missing_files <- c()
@@ -36,7 +39,7 @@ for (j in 1:length(slurm_codes)){
   }
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-
+setwd("../../")
 
 outList <- slurm_out
 outDF <- list()
@@ -82,10 +85,15 @@ test3 <- test2 %>%
   group_by(M, site_covs) %>%
   summarise(mean_weight = mean(weight))
 
+a <- test2[, c("list_index", "site_covs", "M", "weight")]
+a$weight <- round(a$weight, 3)
+
 # select results from baseline for simulations
 # simulations/model fits to see how many modes in mixture model
 
-index <- which(baselineDF$M == 2 & baselineDF$site_covs == "lat")
+# index <- which(baselineDF$M == 2 & baselineDF$site_covs == "lat") #Spicebush
+index <- which(baselineDF$M == 2 & baselineDF$site_covs == "AnnGDD") #Pecks
+
 
 slurm_out2 <- slurm_out[c(index)]
 
