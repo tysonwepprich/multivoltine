@@ -1,4 +1,4 @@
-# take slurm covariates output and put into data files by species
+# take slurm covariates output and put into data files by species 
 # this data will then be ready for simulations for mixture model mode testing
 
 # also should extract needed data from output from non-slurm SlurvCov analysis

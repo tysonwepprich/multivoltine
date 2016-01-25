@@ -1,5 +1,4 @@
-# Hopefully final draft of stopover model analysis
-
+# Hopefully final draft of stopover model analysis 
 # 1. By species, constrain M to best values (by manually looking at phenograms)
 # 2. Auto-bootstrap M selection for base M and M+1 for each year
 # 3. Run bootstrap to get parameter estimates for best M for each year
