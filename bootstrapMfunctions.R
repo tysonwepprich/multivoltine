@@ -1,4 +1,8 @@
 # source this for bootstrap M functions
+list.of.packages <- c("devtools", "msm", "parallel", "plyr", "dplyr", "tidyr", 
+                      "readr", "reshape", "reshape2", "data.table")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages) > 0) install.packages(new.packages)
 
 # library(rslurm)
 library(devtools)

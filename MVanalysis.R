@@ -51,7 +51,7 @@ for (j in 1:length(dat)){
 }
 
 # list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 10])
-list_index_min_data <- c(6, 9) # test problem with SSSkip 
+list_index_min_data <- c(7, 9) # test problem with RSP
 
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
@@ -75,8 +75,15 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
+# single core
 system.time({
-cl <- makeCluster(4)
+  test <- lapply(paramIN$nRun, SlurmCovs)
+  })
+
+
+# multiscore
+system.time({
+cl <- makeCluster(1)
 clusterEvalQ(cl, {
   library(devtools)
   library(msm)
@@ -90,6 +97,7 @@ stopCluster(cl)
 })
 
 saveRDS(test, file = "SilSpotSkippatch.rds")
+saveRDS(test, file = "RSPpatch.rds")
 
 # saveRDS(test, file = "HackEmp.rds")
 
