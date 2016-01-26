@@ -43,16 +43,6 @@ SpeciesData <- function(species){
   data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
   data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
   
-  data[, Year := year(SiteDate)]
-  data[, `:=` (WeekPerYear = length(unique(Week)),
-               SurvPerYear = length(unique(SeqID))), 
-       by = list(SiteID, Year)]
-  dat <- data[WeekPerYear >= 15]
-  
-  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
-  
-  dat <- dat[CommonName == species][Year >= 1998]
-  
   #Site covariates for mu, weights
   #GDD from Dan (or maybe Leslie/Rick Reeves?)
   gdd <- fread("data/GddResultsAllSites_1996_2012.csv")
@@ -74,6 +64,24 @@ SpeciesData <- function(species){
   sites <- read_csv("data/OHsites_reconciled.csv")
   names(sites)[1] <- "SiteID"
   sites$SiteID <- formatC(sites$SiteID, width = 3, format = "d", flag = "0")
+  
+  # resolve sites not matching between 3 datasets
+  masterSites <- merge(unique(sites[, "SiteID"]), unique(gdd_summary[, "SiteID", with = FALSE]))
+  masterSites <- merge(masterSites, unique(data[, "SiteID", with = FALSE]))
+  
+  data <- data[which(data$SiteID %in% masterSites$SiteID), ]
+  sites <- sites[which(sites$SiteID %in% masterSites$SiteID), ]
+  gdd_summary <- gdd_summary[which(gdd_summary$SiteID %in% masterSites$SiteID), ]
+  
+  data[, Year := year(SiteDate)]
+  data[, `:=` (WeekPerYear = length(unique(Week)),
+               SurvPerYear = length(unique(SeqID))), 
+       by = list(SiteID, Year)]
+  dat <- data[WeekPerYear >= 15]
+  
+  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
+  dat <- dat[CommonName == species][Year >= 1998]
+  
   
   years <- sort(unique(dat$Year))
   dat_list <- as.list(years)
@@ -174,15 +182,16 @@ SpeciesData <- function(species){
     # use gdd from closest other site
     # Turn this into a function!
     rowNA <- which(is.na(cov_sites$SpringGDD))
-    d <- dist(cbind(cov_sites$lat, cov_sites$lon), upper = TRUE)
-    dists <- as.matrix(d)[rowNA,]
-    dists[which(dists == 0)] <- NA
-    mindist <- apply(dists, 1, min, na.rm = TRUE)
-    for (md in 1:length(rowNA)){
-      rowReplace <- which(dists[md, ] == mindist[md])
-      cov_sites[rowNA[md], c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+    if (length(rowNA) > 0){
+      d <- dist(cbind(cov_sites$lat, cov_sites$lon), upper = TRUE)
+      dists <- as.matrix(d)[rowNA,]
+      dists[which(dists == 0)] <- NA
+      mindist <- apply(dists, 1, min, na.rm = TRUE)
+      for (md in 1:length(rowNA)){
+        rowReplace <- which(dists[md, ] == mindist[md])
+        cov_sites[rowNA[md], c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+      }
     }
-
     cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(survs$SiteID)), ]
     
     dat_list[[i]]$site_covs <- cov_sites

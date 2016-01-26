@@ -15,6 +15,29 @@ i <- 13 #slr1826
 # i <- 2 #slr2085
 # i <- 3 #slr2152
 
+########################
+# extract data from SlurmCov results from parlapply (non-slurm)
+temp <- readRDS("SilSpotSkiptest.rds")
+test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
+
+outList <- temp
+outDF <- list()
+for (i in 1:length(outList)){
+  out <- outList[[i]][[1]]$pars
+  out$model <- i
+  out$ll.val <- outList[[i]][[1]]$ll.val
+  if (is.na(out$ll.val)){
+    out$npar <- NA
+  }else{
+    out$npar <- outList[[i]][[1]]$npar
+  }
+  out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
+#############################################
 
 
 # extract data from SlurmCov results
@@ -58,6 +81,8 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
+###############################################
+
 
 # AnnGDD or latitude for site covariate? Judge with AIC
 
