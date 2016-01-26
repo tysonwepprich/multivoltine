@@ -13,8 +13,8 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
 # i <- 16 #slr4158
-i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
-# i <- 14 #slr7389 #RSP has NA ll.val on 2004/06 for 2/3M, unknown why it's not fitting
+i <- 15 #slr7296 
+# i <- 14 #slr7389 
 # i <- 13 #slr1826
 # i <- 12 #slr1965
 # i <- 10 #slr2023
