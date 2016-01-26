@@ -13,7 +13,7 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-i <- 5
+i <- 15
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
 maxBrood <- allSpecies$MaxBrood[i]
@@ -81,7 +81,9 @@ test <- parLapply(cl, paramIN$nRun, SlurmCovs)
 stopCluster(cl)
 })
 
-saveRDS(test, file = "HackEmp.rds")
+saveRDS(test, file = "SilSpotSkiptest.rds")
+
+# saveRDS(test, file = "HackEmp.rds")
 
 
 # choose your species
