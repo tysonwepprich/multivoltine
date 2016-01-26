@@ -12,8 +12,7 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-
-# i <- 16 #slr4158
+i <- 16 #slr4158
 # i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
 # i <- 14 #slr7389 #RSP has NA ll.val on 2004/06 for 2/3M, unknown why it's not fitting
 # i <- 13 #slr1826
@@ -51,13 +50,14 @@ for (j in 1:length(dat)){
   data_avail <- rbind(data_avail, new_row)
 }
 
-list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 10])
+# list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 10])
+list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
-site_covs <- c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
 sigma.m <- "het" #  c("het", "hom")
 phi.m <- "const" # c("const", "logit.a")
@@ -75,6 +75,29 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
+# single core
+test <- lapply(paramIN$nRun, SlurmCovs)
+
+# multiscore
+system.time({
+cl <- makeCluster(1)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  library(StopoverCode) #on linux
+  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  load("dataIN.RData")
+})
+test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+stopCluster(cl)
+})
+
+saveRDS(test, file = "SilSpotSkippatch.rds")
+
+# saveRDS(test, file = "HackEmp.rds")
+
+
 
 # calculate null hypotheses for M for different species
 ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
@@ -82,25 +105,12 @@ ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
                         data_file = "dataIN.RData", 
                         # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                         output = "raw")
-# 
-# cl <- makeCluster(4)
-# clusterEvalQ(cl, {
-#   library(devtools)
-#   library(msm)
-#   library(dplyr)
-#   library(StopoverCode) #on linux
-#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-#   load("dataIN.RData")
-# })
-# test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-# stopCluster(cl)
+
 
 # Next step, go through processSlurmCov.R to choose best site_cov for species over all years
 # May need to edit code depending on how lists are output, lengths may differ
 # this throws indexing off for some species/years
 # Stupidly manual, but at least allows for some checks.
-
-
 
 
 # simulate data from best-fit model parameters for each year
