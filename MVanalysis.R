@@ -16,11 +16,11 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # i <- 16 #slr4158
 # i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
 # i <- 14 #slr7389 #RSP has NA ll.val on 2004/06 for 2/3M, unknown why it's not fitting
-i <- 13 #slr1826
+# i <- 13 #slr1826
 # i <- 12 #slr1965
 # i <- 10 #slr2023
 # i <- 2 #slr2085
-# i <- 3 #slr2152
+i <- 3 #slr2152
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -249,16 +249,30 @@ for (bs in 1:length(SampleList)){
 } #close Sample for loop
 
 # saveRDS(SampleList, file = "simDataGenMode/SpiceSwalSampleList.rds")
-saveRDS(SampleList, file = "simDataGenMode/PeckSkipSampleList.rds")
+# saveRDS(SampleList, file = "simDataGenMode/PeckSkipSampleList.rds")
+saveRDS(SampleList, file = "simDataGenMode/ETigerSwalSampleList.rds")
 
 
-SampleList <- readRDS("simDataGenMode/PeckSkipSampleList.rds")
+SampleList <- readRDS("simDataGenMode/ETigerSwalSampleList.rds")
 # data_file Rdata
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:length(SampleList)))
+
+
+cl <- makeCluster(8)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  # library(StopoverCode) #on linux
+  devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  load("dataIN.RData")
+})
+test <- parLapply(cl, paramIN$nRun, SlurmGeneration)
+stopCluster(cl)
 
 
 

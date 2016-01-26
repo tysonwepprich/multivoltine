@@ -9,16 +9,16 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # i <- 16 #slr4158
 # i <- 15 #slr7296
 # i <- 14 #slr7389
-i <- 13 #slr1826
+# i <- 13 #slr1826
 # i <- 12 #slr1965
 # i <- 10 #slr2023
 # i <- 2 #slr2085
-# i <- 3 #slr2152
+i <- 3 #slr2152
 
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr1826")
+slurm_codes <- c("slr2152")
 slurm_out <- list()
 setwd("slurmCovOutput/sesyncResults")
 
@@ -92,7 +92,8 @@ a$weight <- round(a$weight, 3)
 # simulations/model fits to see how many modes in mixture model
 
 # index <- which(baselineDF$M == 2 & baselineDF$site_covs == "lat") #Spicebush
-index <- which(baselineDF$M == 2 & baselineDF$site_covs == "AnnGDD") #Pecks
+# index <- which(baselineDF$M == 2 & baselineDF$site_covs == "lat") #Pecks
+index <- which(baselineDF$M == 2 & baselineDF$site_covs == "lat") #ETS
 
 
 slurm_out2 <- slurm_out[c(index)]
