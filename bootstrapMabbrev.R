@@ -1,23 +1,23 @@
-# abbreviated version of bootstrapM.R
+# abbreviated version of bootstrampM.R
 # run one M null hypothesis at a time, to prevent unnecessary computation
 
 source('bootstrapMfunctions.R')
 
 
 # load data
-count_array <- readRDS('count_array_expanded.rds')
-cov_array <- readRDS('covariates_array_expanded.rds')
-cov_sites <- readRDS('covariates_sites_expanded.rds')
-species_list <- readRDS('species_expanded.rds')
+# count_array <- readRDS('count_array_expanded.rds')
+# cov_array <- readRDS('covariates_array_expanded.rds')
+# cov_sites <- readRDS('covariates_sites_expanded.rds')
+# species_list <- readRDS('species_expanded.rds')
 # 
-# count_array <- readRDS('count_array.2009.rds')
-# cov_array <- readRDS('covariates_array.2009.rds')
-# cov_sites <- readRDS('covariates_sites.2009.rds')
-# species_list_2009 <- readRDS('species.2009.rds')
+count_array <- readRDS('count_array.2010.rds')
+cov_array <- readRDS('covariates_array.2010.rds')
+cov_sites <- readRDS('covariates_sites.2010.rds')
+species_list <- readRDS('species.2010.rds')
 
 # choose parameter ranges
-species <- c(6, 20, 25, 27, 30, 32) # corresponds to row in species_list
-raw_cutoff <- 10 
+species <- c(7,8,12:15,17:19,21:23,26,27,29,32,36,38,39) # corresponds to row in species_list
+raw_cutoff <- 5
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
 site_covs <- "AnnGDD" # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
@@ -40,12 +40,12 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 # calculate null hypotheses for M for different species
 baseline <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                        cpus_per_node = 8, nodes = 2, 
+                        cpus_per_node = 8, nodes = 5, 
                         data_file = "dataIN.RData", 
                         # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                         output = "raw")
 
-slurm_codes <- c("slr3096")
+slurm_codes <- c("slr1539", "slr4788")
 slurm_out <- list()
 
 for (j in 1:length(slurm_codes)){
@@ -64,6 +64,7 @@ for (j in 1:length(slurm_codes)){
     }
   }
 }
+test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 
 
 outList <- slurm_out
@@ -88,18 +89,20 @@ baselineDF <- outDF
 
 # select M=2 to simulate data (to test vs. M = 3)
 # for M 3v4, remove SSSkip, too long to run
-index <- which(baselineDF$M == 3 & baselineDF$species != 6)
-slurm_out <- slurm_out[c(index)]
+index <- which(baselineDF$M == 3 & baselineDF$species != 38) # Northern Broken Dash N.est too high, rpois errors
+# index <- which(baselineDF$M == 3)
+
+slurm_out2 <- slurm_out[c(index)]
 
 
 
 # what to do about ll.val == NA for M = 1?
 nsim <- 100
-SampleList <- vector("list", length = length(slurm_out)*nsim)
+SampleList <- vector("list", length = length(slurm_out2)*nsim)
 # make bootstrap data simulations for each model x 100
 for (bs in 1:length(SampleList)){
   mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
-  nullFit <- slurm_out[[mod]]
+  nullFit <- slurm_out2[[mod]]
   # building output list
   SampleList[[bs]]$pars <- nullFit$pars
   # move on to next model if ll.val is NA
@@ -111,6 +114,7 @@ for (bs in 1:length(SampleList)){
     SampleList[[bs]]$ll.val <- nullFit$ll.val
     SampleList[[bs]]$npar <- nullFit$npar
   }
+  
   
   species <- nullFit$pars$species
   M <- nullFit$pars$M
@@ -136,7 +140,15 @@ for (bs in 1:length(SampleList)){
   w.est <- nullFit$w.est
   
   simData <- list()
-  N.tr <- rpois(S, N.est)
+  
+  # problem with large N.est creating NA's in rpois
+#   if (length(is.na(rpois(S, N.est))) > 0){
+#     SampleList[[bs]]$ll.val <- NA
+#     SampleList[[bs]]$npar <- NA
+#     next
+#   }
+  
+  N.tr <- rpois(S, N.est) 
   phi.tr <- matrix(phi.est, TIME-1, TIME-1)
   
   cov.p_vary <- array(runif(S*TIME, -1, 1), c(S, TIME))
@@ -237,12 +249,12 @@ paramIN <- data.frame(nRun = seq(1:length(SampleList)))
 
 # calculate null hypotheses for M = 1:5 for different species
 alt <- slurm_apply(f = SlurmGeneration, params = paramIN, 
-                   cpus_per_node = 8, nodes = 4, 
+                   cpus_per_node = 8, nodes = 8, 
                    data_file = "dataIN.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
-slurm_codes <- c("slr4213")
+slurm_codes <- c("slr3887", "slr860")
 slurm_out <- list()
 
 for (j in 1:length(slurm_codes)){
@@ -306,8 +318,8 @@ for (i in 1:length(outList)){
 BSmods <- outDF
 
 
-baselineDF <- readRDS("baseline3v4.rds")
-parsIN <- data.frame(expand.grid.alt(c(3), unique(BSmods$species)))
+# baselineDF <- readRDS("baseline3v4.rds")
+parsIN <- data.frame(expand.grid.alt(c(2,3), unique(BSmods$species)))
 names(parsIN) <- c("nullM", "spec")
 Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec)) %>% data.frame()
 # saveRDS(Mtest, file = "Mtest2v3.rds")
