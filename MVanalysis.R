@@ -12,8 +12,8 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-# i <- 16 #slr4158
-i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
+i <- 16 #slr4158
+# i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
 # i <- 14 #slr7389 #RSP has NA ll.val on 2004/06 for 2/3M, unknown why it's not fitting
 # i <- 13 #slr1826
 # i <- 12 #slr1965
@@ -75,8 +75,12 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
+# single core
+test <- lapply(paramIN$nRun, SlurmCovs)
+
+# multiscore
 system.time({
-cl <- makeCluster(4)
+cl <- makeCluster(1)
 clusterEvalQ(cl, {
   library(devtools)
   library(msm)
