@@ -20,6 +20,7 @@ i <- 16 #slr4158
 # i <- 10 #slr2023
 # i <- 2 #slr2085
 i <- 3 #slr2152
+i <- 7
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -50,8 +51,8 @@ for (j in 1:length(dat)){
   data_avail <- rbind(data_avail, new_row)
 }
 
-# list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 10])
-list_index_min_data <- c(6, 9) # test problem with SSSkip 
+list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
+# list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)

@@ -1,0 +1,39 @@
+Notes about intermediate steps in the analysis (bad, I know!).
+
+1. Looked at phenology plots made with GAMs to come up with reasonable number of 
+generations for each species x year. Then mixture models will choose M.
+
+2. Ran Matechou model for all species, years, and reasonable M values. 
+Also tried Annual GDD vs latitude as covariates.
+
+Noticed lots of missing data (NA's), traced to a bug of sites being mismatched.
+Will need to be rerun for some species (all species?)
+Right now, look at extent of problem and choose lat vs gdd for site covariate.
+
+Results from my R server
+Black Swallowtail: 1 yr missing, lat .58 weight
+European skipper: 1 yr missing from 2M, many missing from 1M-big problem. lat even with gdd
+Hackberry Emperor: 1 yr missing, lat .82 weight
+Hobomok skipper: only 1M missing, about half. Lat .66 for 2M. similar problem to European skipper
+Juvenal's duskywing: only 1 year modeled, did other miss cutoff??
+Least Skipper: 2 years missing, gdd .67.
+Little Glassywing: all 1M missing, none from 2/3M. lat .6
+N Broken dash: all 1M missing, few years met cutoff, reran with lowered cutoff (5)
+  all 1M still missing, lat .81
+Viceroy: 1 yr missing, lat .14 vs .13 for 3M, gdd .49 vs .25 for 4M
+Wild Indigo duskywing: none missing, gdd .55
+Zabulon skipper: none missing, gdd .54
+
+Results from slurm/sesync
+E Tiger Swallowtail: 3 years missing, lat .5 vs gdd .45, duplicate gdd .51
+Spicebush Swallowtail: none missing, lat .62
+Silver-spotted skipper: lots of errors, maybe run over?
+Red-spotted purple: missing 2 years, lat .66
+Peck's skipper: none missing, gdd .84
+missing all Common Wood Nymph, Little Wood Satyr, N Pearley Eye
+
+Should I expand possible Min/MaxBrood?? Maybe just max brood by 1 to ensure 
+mixture model mode selection works and stops at the plausible M.
+
+
+
