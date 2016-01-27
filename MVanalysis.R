@@ -12,9 +12,9 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-i <- 16 #slr4158
-# i <- 15 #slr7296 #Silver Sp Skip has 3M SlurmCov error "Error in rowSums(counts, na.rm = TRUE) : \n  'x' must be an array of at least two dimensions
-# i <- 14 #slr7389 #RSP has NA ll.val on 2004/06 for 2/3M, unknown why it's not fitting
+# i <- 16 #slr4158
+i <- 15 #slr7296 
+# i <- 14 #slr7389 
 # i <- 13 #slr1826
 # i <- 12 #slr1965
 # i <- 10 #slr2023
@@ -54,6 +54,7 @@ for (j in 1:length(dat)){
 list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 # list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
+
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
@@ -77,7 +78,10 @@ save(list = dataIN, file = "dataIN.RData")
 paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 # single core
-test <- lapply(paramIN$nRun, SlurmCovs)
+system.time({
+  test <- lapply(paramIN$nRun, SlurmCovs)
+  })
+
 
 # multiscore
 system.time({
@@ -95,6 +99,7 @@ stopCluster(cl)
 })
 
 saveRDS(test, file = "SilSpotSkippatch.rds")
+saveRDS(test, file = "RSPpatch.rds")
 
 # saveRDS(test, file = "HackEmp.rds")
 
