@@ -453,10 +453,6 @@ BSpval <- function(nullM, spec){
     group_by(nRun) %>% mutate(NumSuccess = length(ll.val)) %>%
     filter(NumSuccess == 2)
   
-  #   if (length(which(BStests$model == "null")) < length(which(BStests$model == "alt"))){
-  #     
-  #   }
-  
   LRdistr <- BStests %>% group_by(nRun) %>%
     summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
   B <- nrow(LRdistr)
