@@ -20,7 +20,7 @@ i <- 15 #slr7296
 # i <- 10 #slr2023
 # i <- 2 #slr2085
 i <- 3 #slr2152
-i <- 7
+i <- 12
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -118,7 +118,107 @@ ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
 # this throws indexing off for some species/years
 # Stupidly manual, but at least allows for some checks.
 
+# for a given species
+# simulate data for each year
+# fit M and M+1 to compare and get p-value to find # of mixture model modes
 
+# I think calculating the MLE of MaxBrood + 1 was unnecssary for the following bootstrap
+# could still use it to compare mode selection with AIC vs bootstrap though
+
+# 100 simulations sufficient to see if p-value close to cutoff 0.05 or 0.1
+# might run more if near boundary
+
+# need to get slurm_out2 for each species before simulation
+
+########################
+# extract data from SlurmCov results from parlapply (non-slurm)
+
+results <- list.files()
+
+for (res in 2:14){
+setwd("slurmCovOutput/otherResults/")
+temp <- readRDS(results[res])
+test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
+
+
+outList <- temp
+outDF <- list()
+for (i in 1:length(outList)){
+  out <- outList[[i]][[1]]$pars
+  out$model <- i
+  out$ll.val <- outList[[i]][[1]]$ll.val
+  if (is.na(out$ll.val)){
+    out$npar <- NA
+    out$maxNest <- NA
+  }else{
+    out$npar <- outList[[i]][[1]]$npar
+    out$maxNest <- round(max(outList[[i]][[1]]$N.est))
+  }
+  out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
+setwd("../../")
+
+#############################################
+
+# 
+# # extract data from SlurmCov results
+# slurm_codes <- c("slr8286")
+# slurm_out <- list()
+# setwd("slurmCovOutput")
+# 
+# for (j in 1:length(slurm_codes)){
+#   missing_files <- c()
+#   tmpEnv <- new.env()
+#   for (i in 0:11) {
+#     fname <- paste0(slurm_codes[j], "_", i, 
+#                     ".RData")
+#     if (fname %in% dir()) {
+#       load(fname, envir = tmpEnv)
+#       slurm_out <- c(slurm_out, get(".rslurm_result", 
+#                                     envir = tmpEnv))
+#     }
+#     else {
+#       missing_files <- c(missing_files, fname)
+#     }
+#   }
+# }
+# test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
+# setwd("../")
+# 
+# outList <- slurm_out
+# outDF <- list()
+# for (i in 1:length(outList)){
+#   if (length(outList[[i]]) == 1){
+#     out <- NA
+#   }else{
+#     out <- outList[[i]]$pars
+#     out$model <- i
+#     out$ll.val <- outList[[i]]$ll.val
+#     if (is.na(out$ll.val)){
+#       out$npar <- NA
+#       out$maxNest <- NA
+#     }else{
+#       out$npar <- outList[[i]]$npar
+#       out$maxNest <- round(max(outList[[i]]$N.est))
+#     }
+#     out$time <- as.double(outList[[i]]$time, units = "mins")
+#   }
+#   outDF[[i]] <- out
+# }
+# 
+# outDF <- do.call("rbind", outDF)
+# baselineDF <- outDF
+###############################################
+# don't need index to select M, doing all at once for a species
+# index <- which(baselineDF$M == 2)
+# slurm_out2 <- slurm_out[c(index)]
+
+species <- outList[[1]][[1]]$pars$species
+slurm_out2 <- outList
 # simulate data from best-fit model parameters for each year
 dat <- SpeciesData(species)
 nsim <- 100
@@ -126,7 +226,7 @@ SampleList <- vector("list", length = length(slurm_out2)*nsim)
 # make bootstrap data simulations for each model x 100
 for (bs in 1:length(SampleList)){
   mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
-  nullFit <- slurm_out2[[mod]]
+  nullFit <- slurm_out2[[mod]][[1]]    # list index 1 added for non-slurm output, not sure why different
   # building output list
   SampleList[[bs]]$pars <- nullFit$pars
   # move on to next model if ll.val is NA
@@ -138,7 +238,6 @@ for (bs in 1:length(SampleList)){
     SampleList[[bs]]$ll.val <- nullFit$ll.val
     SampleList[[bs]]$npar <- nullFit$npar
   }
-  
   
   species <- nullFit$pars$species
   M <- nullFit$pars$M
@@ -152,7 +251,6 @@ for (bs in 1:length(SampleList)){
   surv_present <- which(apply(counts, 1, function(x) length(which(x > 0))) >= 3)
   siteRows <- siteRows[which(siteRows %in% surv_present)]
   counts <- counts[siteRows, ]
-  
   
   S <<- dim(counts)[1] 
   K <<- dim(counts)[2]  
@@ -171,14 +269,14 @@ for (bs in 1:length(SampleList)){
   
   simData <- list()
   
-  # problem with large N.est creating NA's in rpois
-  #   if (length(is.na(rpois(S, N.est))) > 0){
-  #     SampleList[[bs]]$ll.val <- NA
-  #     SampleList[[bs]]$npar <- NA
-  #     next
-  #   }
-  
   N.tr <- rpois(S, N.est) 
+  #problem with large N.est creating NA's in rpois
+    if (length(which(is.na(N.tr))) > 0){
+      SampleList[[bs]]$ll.val <- NA
+      SampleList[[bs]]$npar <- NA
+      next
+    }
+  
   phi.tr <- matrix(phi.est, TIME-1, TIME-1)
   
   cov.p_vary <- array(runif(S*TIME, -1, 1), c(S, TIME))
@@ -264,12 +362,15 @@ for (bs in 1:length(SampleList)){
   SampleList[[bs]]$simData <- simData
 } #close Sample for loop
 
-# saveRDS(SampleList, file = "simDataGenMode/SpiceSwalSampleList.rds")
-# saveRDS(SampleList, file = "simDataGenMode/PeckSkipSampleList.rds")
-saveRDS(SampleList, file = "simDataGenMode/ETigerSwalSampleList.rds")
+saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed = TRUE), "simdata.rds", sep = ""))
 
 
-SampleList <- readRDS("simDataGenMode/ETigerSwalSampleList.rds")
+}
+
+
+
+
+SampleList <- readRDS("simDataGenMode/NorthernBroken-Dashsimdata.rds")
 # data_file Rdata
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
@@ -289,6 +390,25 @@ clusterEvalQ(cl, {
 })
 test <- parLapply(cl, paramIN$nRun, SlurmGeneration)
 stopCluster(cl)
+
+# alternative parLapply load balancing function
+parLapplyLB2 <- function(cl, x, fun, ...)
+{
+  LB.init <- function(fun, ...)
+  {
+    assign(".LB.fun", fun, pos=globalenv())
+    assign(".LB.args", list(...), pos=globalenv())
+    NULL
+  }
+  
+  LB.worker <- function(x) do.call(".LB.fun", c(list(x), .LB.args))
+  
+  clusterCall(cl, LB.init, fun, ...)
+  r <- clusterApplyLB(cl, x, LB.worker)
+  clusterEvalQ(cl, rm(".LB.fun", ".LB.args", pos=globalenv()))
+  r
+} 
+
 
 
 

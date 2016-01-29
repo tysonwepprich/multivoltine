@@ -318,7 +318,7 @@ for (i in 1:length(outList)){
 BSmods <- outDF
 
 
-# baselineDF <- readRDS("baseline3v4.rds")
+baselineDF <- readRDS("baseline3v4.rds")
 parsIN <- data.frame(expand.grid.alt(c(2,3), unique(BSmods$species)))
 names(parsIN) <- c("nullM", "spec")
 Mtest <- parsIN %>% rowwise() %>% mutate(pval = BSpval(nullM, spec)) %>% data.frame()

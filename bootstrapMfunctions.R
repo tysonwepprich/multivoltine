@@ -324,7 +324,7 @@ SlurmCovs <- function(nRun){
 SlurmGeneration <- function(nRun){
   out <- vector("list", length = 2)
   BSdata <- SampleList[[nRun]]
-  if (is.na(BSdata$ll.val)){
+  if (length(which("simData" %in% names(BSdata))) == 0){ # if no simData made, move along (happens if ll.val = NA or rpois error (N.est too big))
     out[[1]]$pars <- BSdata$pars
     out[[1]]$ll.val <- NA
     out[[1]]$nRun <- nRun
