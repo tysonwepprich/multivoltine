@@ -28,6 +28,8 @@ clusterEvalQ(cl, {
 test <- parLapply(cl, paramIN$nRun, SlurmGeneration)
 stopCluster(cl)})
 
+saveRDS(test, file = "NBD_bootstrapM.rds")
+
 # parLapplyLB
 speedtest$time[2] <- system.time({cl <- makeCluster(16)
 clusterEvalQ(cl, {
