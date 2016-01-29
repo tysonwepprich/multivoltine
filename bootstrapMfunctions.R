@@ -324,7 +324,7 @@ SlurmCovs <- function(nRun){
 SlurmGeneration <- function(nRun){
   out <- vector("list", length = 2)
   BSdata <- SampleList[[nRun]]
-  if (is.na(BSdata$ll.val)){
+  if (length(which("simData" %in% names(BSdata))) == 0){ # if no simData made, move along (happens if ll.val = NA or rpois error (N.est too big))
     out[[1]]$pars <- BSdata$pars
     out[[1]]$ll.val <- NA
     out[[1]]$nRun <- nRun
@@ -452,10 +452,6 @@ BSpval <- function(nullM, spec){
     filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt") %>%
     group_by(nRun) %>% mutate(NumSuccess = length(ll.val)) %>%
     filter(NumSuccess == 2)
-  
-  #   if (length(which(BStests$model == "null")) < length(which(BStests$model == "alt"))){
-  #     
-  #   }
   
   LRdistr <- BStests %>% group_by(nRun) %>%
     summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))

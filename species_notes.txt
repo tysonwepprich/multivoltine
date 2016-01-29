@@ -40,7 +40,7 @@ Black Swallowtail: Done
 Euro Skip: Done
 Hack Emp: Done
 Hob Skip: Done
-Zab Skip
+Zab Skip: Done
 
 Atmosphere
 Little Wood Satyr --Error, no .rds saved, half monthly allocation used
@@ -49,7 +49,8 @@ Amazon
 SS Skip --Error, no .rds saved, trying again: Done
 Spicebush Swall: Done
 Viceroy: Done
-Least skipper 
+Least skipper: Done
+Wild Indigo Duskywing: Done
 
 Sesync 
 Common Wood Nymph: Mixed up, redoing. Done, slr5168.
@@ -62,4 +63,6 @@ Laptop
 Juvenals Duskywing: Done
 E Tig Swall: Done
 Little GlassyWing: Done
+Little Wood Satyr: Done
+
 
