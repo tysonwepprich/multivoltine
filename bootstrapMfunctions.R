@@ -4,7 +4,7 @@ list.of.packages <- c("devtools", "msm", "parallel", "plyr", "dplyr", "tidyr",
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages) > 0) install.packages(new.packages)
 
-# library(rslurm)
+library(rslurm)
 library(devtools)
 library(msm)
 library(parallel)
@@ -24,11 +24,11 @@ library(data.table)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-# library(StopoverCode)
+library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-devtools::load_all("StopoverCode", recompile = TRUE)
+# devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Data prep function, input CommonName

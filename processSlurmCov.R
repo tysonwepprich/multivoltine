@@ -41,9 +41,9 @@ i <- 3 #slr2152, #slr2085 duplicated accidentally, slr1965, slr2023 also ETS??
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr2023")
+slurm_codes <- c("slr7743")
 slurm_out <- list()
-setwd("slurmCovOutput/sesyncResults")
+# setwd("slurmCovOutput/sesyncResults")
 
 for (j in 1:length(slurm_codes)){
   missing_files <- c()
@@ -62,7 +62,7 @@ for (j in 1:length(slurm_codes)){
   }
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-setwd("../../")
+# setwd("../../")
 
 outList <- slurm_out
 outDF <- list()
