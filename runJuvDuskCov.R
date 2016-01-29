@@ -43,7 +43,7 @@ list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 raw_cutoff <- 5 # c(5, 10)
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
-site_covs <- c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
 sigma.m <- "het" #  c("het", "hom")
 phi.m <- "const" # c("const", "logit.a")

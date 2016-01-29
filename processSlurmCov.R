@@ -18,25 +18,27 @@ i <- 3 #slr2152, #slr2085 duplicated accidentally, slr1965, slr2023 also ETS??
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 # temp <- readRDS("slurmCovOutput/otherResults/ZabSkipCovs.rds")
-# test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
-# 
-# outList <- temp
-# outDF <- list()
-# for (i in 1:length(outList)){
-#   out <- outList[[i]][[1]]$pars
-#   out$model <- i
-#   out$ll.val <- outList[[i]][[1]]$ll.val
-#   if (is.na(out$ll.val)){
-#     out$npar <- NA
-#   }else{
-#     out$npar <- outList[[i]][[1]]$npar
-#   }
-#   out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
-#   outDF[[i]] <- out
-# }
-# 
-# outDF <- do.call("rbind", outDF)
-# baselineDF <- outDF
+temp <- readRDS("ETigerSwallCov.rds")
+
+test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
+
+outList <- temp
+outDF <- list()
+for (i in 1:length(outList)){
+  out <- outList[[i]][[1]]$pars
+  out$model <- i
+  out$ll.val <- outList[[i]][[1]]$ll.val
+  if (is.na(out$ll.val)){
+    out$npar <- NA
+  }else{
+    out$npar <- outList[[i]][[1]]$npar
+  }
+  out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
 #############################################
 
 
