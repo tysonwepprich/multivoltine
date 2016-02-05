@@ -315,6 +315,7 @@ SlurmCovs <- function(nRun){
   
   temp$time <- startTime - Sys.time()
   temp$pars <- pars
+  temp$nRun <- nRun
   out[[1]] <- temp
   return(out)
 }
