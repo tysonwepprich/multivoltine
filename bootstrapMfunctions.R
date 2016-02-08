@@ -23,8 +23,8 @@ library(data.table)
 
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
-install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
+# install.packages("StopoverCode", repos = NULL, type="source")
+# library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
@@ -149,14 +149,14 @@ SpeciesData <- function(species){
       covs[is.na(covs[,j]), j] <- mean(covs[,j], na.rm = TRUE)
     }
     
-    covs$Ztemp <- poly(covs$mean.temp, 2)[, 1]
-    covs$Ztemp2 <- poly(covs$mean.temp, 2)[, 2]
-    covs$Zwind <- scale(covs$mean.wind)
-    covs$Zcloud <- scale(covs$mean.cloud)
-    covs$Zduration <- scale(covs$duration)
-    covs$Zhour <- scale(covs$start.hour)
-    covs$Zspecies <- scale(covs$num.species)
-    covs$Zallabund <- scale(log(covs$abund))
+    covs$Ztemp <- scale(poly(covs$mean.temp, 2)[, 1])[1:nrow(covs)]
+    covs$Ztemp2 <- scale(poly(covs$mean.temp, 2)[, 2])[1:nrow(covs)]
+    covs$Zwind <- scale(covs$mean.wind)[1:nrow(covs)]
+    covs$Zcloud <- scale(covs$mean.cloud)[1:nrow(covs)]
+    covs$Zduration <- scale(covs$duration)[1:nrow(covs)]
+    covs$Zhour <- scale(covs$start.hour)[1:nrow(covs)]
+    covs$Zspecies <- scale(covs$num.species)[1:nrow(covs)]
+    covs$Zallabund <- scale(log(covs$abund + 1))[1:nrow(covs)]
     
     # new idea for phi, include ordinal day for time/age standard instead of week
     covs$Zjulian <- scale(yday(covs$SiteDate))

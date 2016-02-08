@@ -1,24 +1,28 @@
 
 # phiout <- get_slurm_out(sjob8)
 # models <- phiout[13]
-models <- slurm_out[6][[1]]
+# models <- slurm_out[6][[1]]
 # models <- base_out[[23]]
+models <- temp[[4]]
 
-counts <- count_array[,,32] #select species here, number corresponds to row in species_list
+dat <- SpeciesData(allSpecies$CommonName[15])
+counts <- dat[[4]]$counts
+matplot(t(counts), type = "l")
+# counts <- count_array[,,32] #select species here, number corresponds to row in species_list
 
 # select sites with enough individuals counted
-siteRows <- which(rowSums(counts, na.rm = TRUE) >= 5)
+siteRows <- which(rowSums(counts, na.rm = TRUE) >= 10)
 counts <- counts[siteRows, ]
-counts[is.na(counts)] <- -1
+# counts[is.na(counts)] <- -1
 
-
+cov_sites <- dat[[4]]$site_covs
 # Covariate (latitude)
 # lat <- cov_sites[siteRows, "lat"]
 lat <- cov_sites[siteRows, "YearGDD"]
 cov.w <- cov.mu <- scale(lat)
 
 
-temp <- models
+temp <- models[[1]]
 
 #---  for selected model ---#
 FittedVal <- FittedVal.f(temp)

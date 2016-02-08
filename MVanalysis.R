@@ -52,20 +52,20 @@ for (j in 1:length(dat)){
 }
 
 
-list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 30])[1:3]
+list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 30])[1]
 # list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
 
 # choose parameter ranges
 raw_cutoff <- 10 # c(5, 10)
-p_cov1 <- c("none", 7, 9) # Select detection covariates here (1:7 possible)
-p_cov2 <- c("none", 5) # Select detection covariates here (1:7 possible)
-p_cov3 <- c("none", 2)
-p_cov4 <- c("none", 1)
+p_cov1 <- 7 # c("none", 7, 9) # Select detection covariates here (1:7 possible)
+p_cov2 <- 5 #c("none", 5) # Select detection covariates here (1:7 possible)
+p_cov3 <- 9 #c("none", 2)
+p_cov4 <- "none" #c("none", 1)
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- c(minBrood:maxBrood) #number of broods to estimate
-sigma.m <- c("het", "hom")
-phi.m <- c("const", "quad.t")
+M <- 3 #c(minBrood:maxBrood) #number of broods to estimate
+sigma.m <- "hom" #c("het", "hom")
+phi.m <- "const" #c("const", "quad.t")
 
 params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, p_cov3, p_cov4,
                       site_covs, M, sigma.m, phi.m,
@@ -175,9 +175,9 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr3048")
+slurm_codes <- c("slr1119")
 slurm_out <- list()
-setwd("slurmCovOutput")
+# setwd("slurmCovOutput")
 
 for (j in 1:length(slurm_codes)){
   missing_files <- c()
@@ -196,7 +196,7 @@ for (j in 1:length(slurm_codes)){
   }
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-setwd("../")
+# setwd("../")
 
 outList <- slurm_out
 outDF <- list()

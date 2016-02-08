@@ -4,7 +4,7 @@ mLLMixtCounts.fit <- function(p.m = "common", w.m = "common", mu.m = "common", s
 {
   ### Maximise log-likelihood ###
   this.fit <- NA
-  this.fit <- try(optim(par=pars.start,fn=mLLMixtCounts.fun,method="L-BFGS-B",hessian=F,control=list(maxit=10000,trace=6)), silent = TRUE) #maxit usually 10000, trace = 6
+  this.fit <- try(optim(par=pars.start,fn=mLLMixtCounts.fun,method="L-BFGS-B",hessian=F,control=list(maxit=10000,trace=1)), silent = TRUE) #maxit usually 10000, trace = 6
   
   if(is.list(this.fit)) {
     outvect <- this.fit$par
