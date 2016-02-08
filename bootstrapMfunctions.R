@@ -28,7 +28,7 @@ library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-# devtools::load_all("StopoverCode", recompile = TRUE)
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Data prep function, input CommonName
@@ -319,6 +319,7 @@ SlurmCovs <- function(nRun){
   
   temp$time <- startTime - Sys.time()
   temp$pars <- pars
+  temp$nRun <- nRun
   out[[1]] <- temp
   return(out)
 }

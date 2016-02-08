@@ -20,7 +20,7 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # i <- 10 #slr2023
 # i <- 2 #slr2085
 i <- 3 #slr2152
-# i <- 12
+
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -51,6 +51,7 @@ for (j in 1:length(dat)){
   data_avail <- rbind(data_avail, new_row)
 }
 
+
 list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 30])[1:3]
 # list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
@@ -80,31 +81,31 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:nrow(params))))
 
-# # single core
-# system.time({
-#   test <- lapply(paramIN$nRun, SlurmCovs)
-#   })
-# 
+# single core
+system.time({
+  test <- lapply(paramIN$nRun, SlurmCovs)
+  })
 
-# # multiscore
-# system.time({
-# cl <- makeCluster(1)
-# clusterEvalQ(cl, {
-#   library(devtools)
-#   library(msm)
-#   library(dplyr)
-#   library(StopoverCode) #on linux
-#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-#   load("dataIN.RData")
-# })
-# test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-# stopCluster(cl)
-# })
 
-# saveRDS(test, file = "SilSpotSkippatch.rds")
-# saveRDS(test, file = "RSPpatch.rds")
+# multiscore
+system.time({
+cl <- makeCluster(4)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  library(StopoverCode) #on linux
+  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  load("dataIN.RData")
+})
+test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+stopCluster(cl)
+})
 
-# saveRDS(test, file = "HackEmp.rds")
+saveRDS(test, file = "SSSKIP_covtest2.rds")
+
+saveRDS(test, file = "SilSpotSkippatch.rds")
+saveRDS(test, file = "RSPpatch.rds")
 
 
 
@@ -136,11 +137,12 @@ ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 
-results <- list.files()
+results <- list.files("slurmCovOutput/otherResults/")
 
-for (res in 2:14){
+# for (res in 2:14){
 setwd("slurmCovOutput/otherResults/")
 temp <- readRDS(results[res])
+temp <- readRDS("SSSKIP_covtest2.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -153,11 +155,15 @@ for (i in 1:length(outList)){
   if (is.na(out$ll.val)){
     out$npar <- NA
     out$maxNest <- NA
+    out$medP <- NA
+    out$nRun <- outList[[i]][[1]]$nRun
   }else{
     out$npar <- outList[[i]][[1]]$npar
     out$maxNest <- round(max(outList[[i]][[1]]$N.est))
+    out$medP <- round(median(outList[[i]][[1]]$p.est), 3)
   }
   out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
+  out$nRun <- outList[[i]][[1]]$nRun
   outDF[[i]] <- out
 }
 
@@ -167,54 +173,54 @@ setwd("../../")
 
 #############################################
 
-# 
-# # extract data from SlurmCov results
-# slurm_codes <- c("slr8286")
-# slurm_out <- list()
-# setwd("slurmCovOutput")
-# 
-# for (j in 1:length(slurm_codes)){
-#   missing_files <- c()
-#   tmpEnv <- new.env()
-#   for (i in 0:11) {
-#     fname <- paste0(slurm_codes[j], "_", i, 
-#                     ".RData")
-#     if (fname %in% dir()) {
-#       load(fname, envir = tmpEnv)
-#       slurm_out <- c(slurm_out, get(".rslurm_result", 
-#                                     envir = tmpEnv))
-#     }
-#     else {
-#       missing_files <- c(missing_files, fname)
-#     }
-#   }
-# }
-# test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-# setwd("../")
-# 
-# outList <- slurm_out
-# outDF <- list()
-# for (i in 1:length(outList)){
-#   if (length(outList[[i]]) == 1){
-#     out <- NA
-#   }else{
-#     out <- outList[[i]]$pars
-#     out$model <- i
-#     out$ll.val <- outList[[i]]$ll.val
-#     if (is.na(out$ll.val)){
-#       out$npar <- NA
-#       out$maxNest <- NA
-#     }else{
-#       out$npar <- outList[[i]]$npar
-#       out$maxNest <- round(max(outList[[i]]$N.est))
-#     }
-#     out$time <- as.double(outList[[i]]$time, units = "mins")
-#   }
-#   outDF[[i]] <- out
-# }
-# 
-# outDF <- do.call("rbind", outDF)
-# baselineDF <- outDF
+
+# extract data from SlurmCov results
+slurm_codes <- c("slr3048")
+slurm_out <- list()
+setwd("slurmCovOutput")
+
+for (j in 1:length(slurm_codes)){
+  missing_files <- c()
+  tmpEnv <- new.env()
+  for (i in 0:11) {
+    fname <- paste0(slurm_codes[j], "_", i, 
+                    ".RData")
+    if (fname %in% dir()) {
+      load(fname, envir = tmpEnv)
+      slurm_out <- c(slurm_out, get(".rslurm_result", 
+                                    envir = tmpEnv))
+    }
+    else {
+      missing_files <- c(missing_files, fname)
+    }
+  }
+}
+test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
+setwd("../")
+
+outList <- slurm_out
+outDF <- list()
+for (i in 1:length(outList)){
+  if (length(outList[[i]]) == 1){
+    out <- NA
+  }else{
+    out <- outList[[i]]$pars
+    out$model <- i
+    out$ll.val <- outList[[i]]$ll.val
+    if (is.na(out$ll.val)){
+      out$npar <- NA
+      out$maxNest <- NA
+    }else{
+      out$npar <- outList[[i]]$npar
+      out$maxNest <- round(max(outList[[i]]$N.est))
+    }
+    out$time <- as.double(outList[[i]]$time, units = "mins")
+  }
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
 ###############################################
 # don't need index to select M, doing all at once for a species
 # index <- which(baselineDF$M == 2)
@@ -373,47 +379,28 @@ saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed
 
 
 
-SampleList <- readRDS("simDataGenMode/NorthernBroken-Dashsimdata.rds")
+SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
 # data_file Rdata
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = seq(1:length(SampleList)))
+paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
 
-cl <- makeCluster(8)
+cl <- makeCluster(4)
 clusterEvalQ(cl, {
   library(devtools)
   library(msm)
   library(dplyr)
-  # library(StopoverCode) #on linux
-  devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  library(StopoverCode) #on linux
+  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
   load("dataIN.RData")
 })
-test <- parLapply(cl, paramIN$nRun, SlurmGeneration)
+time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGeneration)})
 stopCluster(cl)
 
-# alternative parLapply load balancing function
-parLapplyLB2 <- function(cl, x, fun, ...)
-{
-  LB.init <- function(fun, ...)
-  {
-    assign(".LB.fun", fun, pos=globalenv())
-    assign(".LB.args", list(...), pos=globalenv())
-    NULL
-  }
-  
-  LB.worker <- function(x) do.call(".LB.fun", c(list(x), .LB.args))
-  
-  clusterCall(cl, LB.init, fun, ...)
-  r <- clusterApplyLB(cl, x, LB.worker)
-  clusterEvalQ(cl, rm(".LB.fun", ".LB.args", pos=globalenv()))
-  r
-} 
-
-
-
+saveRDS(test, file = "HobomokSkipperBSmod.rds")
 
 # calculate null hypotheses for same species, different years
 peckskip <- slurm_apply(f = SlurmGeneration, params = paramIN, 
