@@ -133,7 +133,7 @@ ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 
-results <- list.files()
+results <- list.files("slurmCovOutput/otherResults/")
 
 for (res in 2:14){
 setwd("slurmCovOutput/otherResults/")
@@ -164,54 +164,54 @@ setwd("../../")
 
 #############################################
 
-# 
-# # extract data from SlurmCov results
-# slurm_codes <- c("slr8286")
-# slurm_out <- list()
-# setwd("slurmCovOutput")
-# 
-# for (j in 1:length(slurm_codes)){
-#   missing_files <- c()
-#   tmpEnv <- new.env()
-#   for (i in 0:11) {
-#     fname <- paste0(slurm_codes[j], "_", i, 
-#                     ".RData")
-#     if (fname %in% dir()) {
-#       load(fname, envir = tmpEnv)
-#       slurm_out <- c(slurm_out, get(".rslurm_result", 
-#                                     envir = tmpEnv))
-#     }
-#     else {
-#       missing_files <- c(missing_files, fname)
-#     }
-#   }
-# }
-# test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-# setwd("../")
-# 
-# outList <- slurm_out
-# outDF <- list()
-# for (i in 1:length(outList)){
-#   if (length(outList[[i]]) == 1){
-#     out <- NA
-#   }else{
-#     out <- outList[[i]]$pars
-#     out$model <- i
-#     out$ll.val <- outList[[i]]$ll.val
-#     if (is.na(out$ll.val)){
-#       out$npar <- NA
-#       out$maxNest <- NA
-#     }else{
-#       out$npar <- outList[[i]]$npar
-#       out$maxNest <- round(max(outList[[i]]$N.est))
-#     }
-#     out$time <- as.double(outList[[i]]$time, units = "mins")
-#   }
-#   outDF[[i]] <- out
-# }
-# 
-# outDF <- do.call("rbind", outDF)
-# baselineDF <- outDF
+
+# extract data from SlurmCov results
+slurm_codes <- c("slr3048")
+slurm_out <- list()
+setwd("slurmCovOutput")
+
+for (j in 1:length(slurm_codes)){
+  missing_files <- c()
+  tmpEnv <- new.env()
+  for (i in 0:11) {
+    fname <- paste0(slurm_codes[j], "_", i, 
+                    ".RData")
+    if (fname %in% dir()) {
+      load(fname, envir = tmpEnv)
+      slurm_out <- c(slurm_out, get(".rslurm_result", 
+                                    envir = tmpEnv))
+    }
+    else {
+      missing_files <- c(missing_files, fname)
+    }
+  }
+}
+test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
+setwd("../")
+
+outList <- slurm_out
+outDF <- list()
+for (i in 1:length(outList)){
+  if (length(outList[[i]]) == 1){
+    out <- NA
+  }else{
+    out <- outList[[i]]$pars
+    out$model <- i
+    out$ll.val <- outList[[i]]$ll.val
+    if (is.na(out$ll.val)){
+      out$npar <- NA
+      out$maxNest <- NA
+    }else{
+      out$npar <- outList[[i]]$npar
+      out$maxNest <- round(max(outList[[i]]$N.est))
+    }
+    out$time <- as.double(outList[[i]]$time, units = "mins")
+  }
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
 ###############################################
 # don't need index to select M, doing all at once for a species
 # index <- which(baselineDF$M == 2)
