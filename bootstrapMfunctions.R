@@ -4,7 +4,7 @@ list.of.packages <- c("devtools", "msm", "parallel", "plyr", "dplyr", "tidyr",
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages) > 0) install.packages(new.packages)
 
-# library(rslurm)
+library(rslurm)
 library(devtools)
 library(msm)
 library(parallel)
@@ -23,8 +23,8 @@ library(data.table)
 
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
-#  install.packages("StopoverCode", repos = NULL, type="source")
-#  library(StopoverCode)
+install.packages("StopoverCode", repos = NULL, type="source")
+library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
@@ -156,12 +156,13 @@ SpeciesData <- function(species){
     covs$Zduration <- scale(covs$duration)
     covs$Zhour <- scale(covs$start.hour)
     covs$Zspecies <- scale(covs$num.species)
+    covs$Zallabund <- scale(log(covs$abund))
     
     # new idea for phi, include ordinal day for time/age standard instead of week
     covs$Zjulian <- scale(yday(covs$SiteDate))
     
     #cast covs as matrix, so NA's inserted for missing surveys
-    cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 8))
+    cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 9))
     
     cov_molten <- melt(covs, id = c("SiteID", "Week", "SiteDate"))
     cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp", ], SiteID ~ Week, value = "value"))
@@ -172,6 +173,7 @@ SpeciesData <- function(species){
     cov_array[,,6] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zhour", ], SiteID ~ Week, value = "value"))
     cov_array[,,7] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ], SiteID ~ Week, value = "value"))
     cov_array[,,8] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zjulian", ], SiteID ~ Week, value = "value"))
+    cov_array[,,9] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zallabund", ], SiteID ~ Week, value = "value"))
     
     dat_list[[i]]$surv_covs <- cov_array
     
@@ -216,6 +218,8 @@ SlurmCovs <- function(nRun){
   raw_cutoff <- pars$raw_cutoff
   p_cov1 <- pars$p_cov1
   p_cov2 <- pars$p_cov2
+  p_cov3 <- pars$p_cov3
+  p_cov4 <- pars$p_cov4
   site_covs <- pars$site_covs
   M <<- pars$M
   #   p.m <<- pars$p.m
@@ -244,8 +248,8 @@ SlurmCovs <- function(nRun){
   # covariates
   cov_array <- temp$surv_covs
   # detection probability
-  covs <- c(p_cov1, p_cov2)
-  covs <- sort(as.numeric(covs[covs %in% as.character(c(1:7))]))
+  covs <- c(p_cov1, p_cov2, p_cov3, p_cov4)
+  covs <- sort(as.numeric(covs[covs %in% as.character(c(1:9))]))
   if (length(covs) == 0) {
     p.m <<- "common" 
     cov.p <- NA
@@ -315,6 +319,7 @@ SlurmCovs <- function(nRun){
   
   temp$time <- startTime - Sys.time()
   temp$pars <- pars
+  temp$nRun <- nRun
   out[[1]] <- temp
   return(out)
 }

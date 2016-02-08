@@ -5,8 +5,7 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-i <- 2
-
+i <- 19
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
 maxBrood <- allSpecies$MaxBrood[i] + 1
@@ -64,29 +63,19 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 # single core
 # test <- lapply(paramIN$nRun, SlurmCovs)
 
+# multiscore
+system.time({
+  cl <- makeCluster(4)
+  clusterEvalQ(cl, {
+    library(devtools)
+    library(msm)
+    library(dplyr)
+    library(StopoverCode) #on linux
+    # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+    load("dataIN.RData")
+  })
+  test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+  stopCluster(cl)
+})
 
-
-# calculate null hypotheses for M for different species
-CWN_Covs <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                            cpus_per_node = 8, nodes = 4, 
-                            data_file = "dataIN.RData", 
-                            # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
-                            output = "raw")
-
-# 
-# # multiscore
-# system.time({
-#   cl <- makeCluster(8)
-#   clusterEvalQ(cl, {
-#     library(devtools)
-#     library(msm)
-#     library(dplyr)
-#     # library(StopoverCode) #on linux
-#     devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-#     load("dataIN.RData")
-#   })
-#   test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-#   stopCluster(cl)
-# })
-
-# saveRDS(test, file = "CWNymphCov.rds")
+saveRDS(test, file = "resultsZabSkipCov.rds")

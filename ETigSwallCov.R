@@ -5,7 +5,11 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
+<<<<<<< HEAD
+i <- 3
+=======
 i <- 9
+>>>>>>> 28a0e73d6f9b4e1f26878e69a71aa968d3e53561
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -43,7 +47,11 @@ list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 raw_cutoff <- 5 # c(5, 10)
 p_cov1 <- 7 # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" # c("none", 1:6) # Select detection covariates here (1:7 possible)
+<<<<<<< HEAD
+site_covs <- c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+=======
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+>>>>>>> 28a0e73d6f9b4e1f26878e69a71aa968d3e53561
 M <- c(minBrood:maxBrood) #number of broods to estimate
 sigma.m <- "het" #  c("het", "hom")
 phi.m <- "const" # c("const", "logit.a")
@@ -66,18 +74,31 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 # multiscore
 system.time({
+<<<<<<< HEAD
+  cl <- makeCluster(4)
+=======
   cl <- makeCluster(7)
+>>>>>>> 28a0e73d6f9b4e1f26878e69a71aa968d3e53561
   clusterEvalQ(cl, {
     library(devtools)
     library(msm)
     library(dplyr)
+<<<<<<< HEAD
+    library(StopoverCode) #on linux
+    # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+=======
     # library(StopoverCode) #on linux
     devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+>>>>>>> 28a0e73d6f9b4e1f26878e69a71aa968d3e53561
     load("dataIN.RData")
   })
   test <- parLapply(cl, paramIN$nRun, SlurmCovs)
   stopCluster(cl)
 })
 
+<<<<<<< HEAD
+saveRDS(test, file = "ETigSwallCov.rds")
+=======
 saveRDS(test, file = "LGlassWingCov.rds")
 source("email_me.R")
+>>>>>>> 28a0e73d6f9b4e1f26878e69a71aa968d3e53561

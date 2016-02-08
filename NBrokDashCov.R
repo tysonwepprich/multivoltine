@@ -5,7 +5,7 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-i <- 2
+i <- 11
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -55,11 +55,11 @@ names(params) <- c("species", "list_index", "raw_cutoff", "p_cov1", "p_cov2",
                    "site_covs", "M", "sigma.m", "phi.m")
 
 # data_file Rdata
-dataIN <- c("dat", "params")
-save(list = dataIN, file = "dataIN.RData")
+dataIN3 <- c("dat", "params")
+save(list = dataIN, file = "dataIN3.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = seq(1:nrow(params)))
+paramIN3 <- data.frame(nRun = seq(1:nrow(params)))
 
 # single core
 # test <- lapply(paramIN$nRun, SlurmCovs)
@@ -67,11 +67,11 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # calculate null hypotheses for M for different species
-CWN_Covs <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                            cpus_per_node = 8, nodes = 4, 
-                            data_file = "dataIN.RData", 
-                            # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
-                            output = "raw")
+NBD_Covs <- slurm_apply(f = SlurmCovs, params = paramIN3, 
+                         cpus_per_node = 8, nodes = 1, 
+                         data_file = "dataIN3.RData", 
+                         # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                         output = "raw")
 
 # 
 # # multiscore

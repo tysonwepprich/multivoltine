@@ -18,7 +18,7 @@ i <- 3 #slr2152, #slr2085 duplicated accidentally, slr1965, slr2023 also ETS??
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 # temp <- readRDS("slurmCovOutput/otherResults/ZabSkipCovs.rds")
-temp <- readRDS("ETigerSwallCov.rds")
+temp <- readRDS("SSSKIP_covtest.rds")
 
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
@@ -43,9 +43,9 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr2023")
+slurm_codes <- c("slr7743")
 slurm_out <- list()
-setwd("slurmCovOutput/sesyncResults")
+# setwd("slurmCovOutput/sesyncResults")
 
 for (j in 1:length(slurm_codes)){
   missing_files <- c()
@@ -64,7 +64,7 @@ for (j in 1:length(slurm_codes)){
   }
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
-setwd("../../")
+# setwd("../../")
 
 outList <- slurm_out
 outDF <- list()
@@ -101,19 +101,19 @@ covTest$AIC <- -2 * covTest$ll.val + 2 * covTest$npar
 # covTest$weight <- covTest$weight1 / sumweight
 
 test <- covTest %>%
-  group_by(list_index) %>%
+  group_by(list_index, M, raw_cutoff) %>%
   mutate(weight1 = exp(-0.5 * (AIC - min(AIC)))) %>%
   mutate(weight = weight1 / sum(weight1))
 
 test2 <- test %>%
-  select(-raw_cutoff, -weight1) %>%
+  select(-species, -weight1) %>%
   # filter(species == 11) %>%
   arrange(AIC) %>%
   data.frame()
 
 # on average over years, does latitude or AnnGDD have higher weight 
 test3 <- test2 %>%
-  group_by(M, site_covs) %>%
+  group_by(M, p_cov1) %>%
   summarise(mean_weight = mean(weight))
 
 a <- test2[, c("list_index", "site_covs", "M", "weight")]
