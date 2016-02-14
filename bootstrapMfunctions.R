@@ -24,11 +24,11 @@ library(data.table)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-# library(StopoverCode)
+library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-devtools::load_all("StopoverCode", recompile = TRUE)
+# devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Data prep function, input CommonName

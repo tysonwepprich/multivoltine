@@ -3,26 +3,27 @@
 # models <- phiout[13]
 # models <- slurm_out[6][[1]]
 # models <- base_out[[23]]
-models <- temp[[4]]
+models <- slurm_out[[166]]
 
-dat <- SpeciesData(allSpecies$CommonName[15])
-counts <- dat[[4]]$counts
+dat <- SpeciesData(allSpecies$CommonName[18])
+counts <- dat[[15]]$counts
 matplot(t(counts), type = "l")
 # counts <- count_array[,,32] #select species here, number corresponds to row in species_list
 
 # select sites with enough individuals counted
-siteRows <- which(rowSums(counts, na.rm = TRUE) >= 10)
+siteRows <- which(rowSums(counts, na.rm = TRUE) >= 5)
 counts <- counts[siteRows, ]
 # counts[is.na(counts)] <- -1
 
-cov_sites <- dat[[4]]$site_covs
+cov_sites <- dat[[15]]$site_covs
 # Covariate (latitude)
 # lat <- cov_sites[siteRows, "lat"]
 lat <- cov_sites[siteRows, "YearGDD"]
 cov.w <- cov.mu <- scale(lat)
 
 
-temp <- models[[1]]
+# temp <- models[[1]]
+temp <- models
 
 #---  for selected model ---#
 FittedVal <- FittedVal.f(temp)
@@ -31,7 +32,7 @@ FittedVal <- FittedVal.f(temp)
 
 #Tyson's plots
 S <- dim(counts)[1]
-t <- dim(counts)[2]
+t <- TIME <- dim(counts)[2]
 df_all <- data.frame()
 for (i in 1:S){
   df <- data.frame(Week = 1:t, Site = rep(i, t))

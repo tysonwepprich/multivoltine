@@ -12,14 +12,32 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-# i <- 16 #slr4158
-# i <- 15 #slr7296 
-# i <- 14 #slr7389 
-# i <- 13 #slr1826
-# i <- 12 #slr1965
-# i <- 10 #slr2023
-# i <- 2 #slr2085
-i <- 3 #slr2152
+# running all species with minimum number of covariates to test M
+# hoped that this would make absurdly high populations less likely
+# even some still have them, maybe run them over again and again until they find a better fit
+# threshold: either > 1000, or maybe if same year, different M give wildly varying N estimates (5x or 10x different)
+
+
+# 14 RSP 6698
+# 18 WIDW 3540
+# 16 Spice 3941
+# 19 Zab 1497
+# 17 Vice 1621
+# 13 Peck 1727
+# 1 Black Swal 1933
+# 2 CWN 2020
+# 3 ETS 2153
+# 4 Euro 2285
+# 5 Hack 2493
+# 6 Hobo 2599
+# 7 Juv 2864
+# 8 Least 2967
+# 15 SSSkip 3152
+# 9 LGW 3308
+# 10 LWS 3441
+# 11 NBD 3528
+# 12 NPE 3629
+i <- 12
 
 
 species <- allSpecies$CommonName[i]
@@ -32,7 +50,7 @@ dat <- SpeciesData(species)
 # for each species, select parameters
 # how much data available for modeling?
 
-count_cutoff <- 10
+count_cutoff <- 5
 surv_cutoff <- 3
 data_avail <- data.frame()
 for (j in 1:length(dat)){
@@ -52,18 +70,18 @@ for (j in 1:length(dat)){
 }
 
 
-list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 30])[1]
+list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 # list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
 
 # choose parameter ranges
-raw_cutoff <- 10 # c(5, 10)
-p_cov1 <- 7 # c("none", 7, 9) # Select detection covariates here (1:7 possible)
-p_cov2 <- 5 #c("none", 5) # Select detection covariates here (1:7 possible)
-p_cov3 <- 9 #c("none", 2)
+raw_cutoff <- 5 # c(5, 10)
+p_cov1 <- "none" #c("none", 7) # Select detection covariates here (1:7 possible)
+p_cov2 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
+p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- 3 #c(minBrood:maxBrood) #number of broods to estimate
+M <- c(minBrood:maxBrood) #number of broods to estimate
 sigma.m <- "hom" #c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
 
@@ -72,49 +90,58 @@ params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, 
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "list_index", "raw_cutoff", "p_cov1", "p_cov2", "p_cov3", "p_cov4",
                    "site_covs", "M", "sigma.m", "phi.m")
+# double size of params with temperature p covariates
+# params2 <- params
+# params2$p_cov2 <- 1
+# params2$p_cov3 <- 2
+# params <- rbind(params, params2)
+
+
 params$param_row <- 1:nrow(params)
+params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
-dataIN <- c("dat", "params")
-save(list = dataIN, file = "dataIN.RData")
+dataIN16 <- c("dat", "params")
+save(list = dataIN16, file = "dataIN16.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = sample(seq(1:nrow(params))))
-
-# single core
-system.time({
-  test <- lapply(paramIN$nRun, SlurmCovs)
-  })
-
-
-# multiscore
-system.time({
-cl <- makeCluster(4)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  library(StopoverCode) #on linux
-  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-  load("dataIN.RData")
-})
-test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-stopCluster(cl)
-})
-
-saveRDS(test, file = "SSSKIP_covtest2.rds")
-
-saveRDS(test, file = "SilSpotSkippatch.rds")
-saveRDS(test, file = "RSPpatch.rds")
-
+paramIN16 <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # calculate null hypotheses for M for different species
-ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                        cpus_per_node = 8, nodes = 4, 
-                        data_file = "dataIN.RData", 
-                        # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
-                        output = "raw")
+NPECovs <- slurm_apply(f = SlurmCovs, params = paramIN16, 
+                          cpus_per_node = 8, nodes = 2, 
+                          data_file = "dataIN16.RData", 
+                          # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                          output = "raw")
+
+# 
+# # single core
+# system.time({
+#   test <- lapply(paramIN$nRun, SlurmCovs)
+#   })
+# 
+# 
+# # multiscore
+# system.time({
+# cl <- makeCluster(4)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   library(StopoverCode) #on linux
+#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+#   load("dataIN.RData")
+# })
+# test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+# stopCluster(cl)
+# })
+# 
+# saveRDS(test, file = "SSSKIP_covtest2.rds")
+# 
+# saveRDS(test, file = "SilSpotSkippatch.rds")
+# saveRDS(test, file = "RSPpatch.rds")
+
 
 
 # Next step, go through processSlurmCov.R to choose best site_cov for species over all years
@@ -156,7 +183,6 @@ for (i in 1:length(outList)){
     out$npar <- NA
     out$maxNest <- NA
     out$medP <- NA
-    out$nRun <- outList[[i]][[1]]$nRun
   }else{
     out$npar <- outList[[i]][[1]]$npar
     out$maxNest <- round(max(outList[[i]][[1]]$N.est))
@@ -175,7 +201,7 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr1119")
+slurm_codes <- c("slr1727")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -210,11 +236,15 @@ for (i in 1:length(outList)){
     if (is.na(out$ll.val)){
       out$npar <- NA
       out$maxNest <- NA
+      out$medP <- NA
+
     }else{
       out$npar <- outList[[i]]$npar
       out$maxNest <- round(max(outList[[i]]$N.est))
+      out$medP <- round(median(outList[[i]]$p.est), 3)
     }
     out$time <- as.double(outList[[i]]$time, units = "mins")
+    out$nRun <- outList[[i]]$nRun
   }
   outDF[[i]] <- out
 }
