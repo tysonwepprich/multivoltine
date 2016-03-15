@@ -16,6 +16,7 @@ library(reshape)
 library(reshape2)
 library(data.table)
 
+#testing change
 
 # Eleni's functions
 # this was replaced by 'StopoverCode' package, loaded with library
