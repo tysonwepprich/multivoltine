@@ -12,7 +12,32 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-i <- 15
+# running all species with minimum number of covariates to test M
+# hoped that this would make absurdly high populations less likely
+# even some still have them, maybe run them over again and again until they find a better fit
+# threshold: either > 1000, or maybe if same year, different M give wildly varying N estimates (5x or 10x different)
+
+
+# 14 RSP 6698
+# 18 WIDW 3540
+# 16 Spice 3941
+# 19 Zab 1497
+# 17 Vice 1621
+# 13 Peck 1727
+# 1 Black Swal 1933
+# 2 CWN 2020
+# 3 ETS 2153
+# 4 Euro 2285
+# 5 Hack 2493
+# 6 Hobo 2599
+# 7 Juv 2864
+# 8 Least 2967
+# 15 SSSkip 3152
+# 9 LGW 3308
+# 10 LWS 3441
+# 11 NBD 3528
+# 12 NPE 3629
+i <- 10
 
 
 species <- allSpecies$CommonName[i]
@@ -20,7 +45,9 @@ minBrood <- allSpecies$MinBrood[i]
 maxBrood <- allSpecies$MaxBrood[i]
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
-dat <- SpeciesData(species)
+# dat <- SpeciesData(species)
+dat <- SpeciesDataP1(species)
+
 
 # for each species, select parameters
 # how much data available for modeling?
@@ -52,12 +79,12 @@ list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
 p_cov1 <- "none" #c("none", 7) # Select detection covariates here (1:7 possible)
-p_cov2 <- "none" #c("none", 9) # Select detection covariates here (1:7 possible)
+p_cov2 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
-sigma.m <- c("het", "hom")
+sigma.m <- "hom" #c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
 
 params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, p_cov3, p_cov4,
@@ -65,8 +92,15 @@ params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, 
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "list_index", "raw_cutoff", "p_cov1", "p_cov2", "p_cov3", "p_cov4",
                    "site_covs", "M", "sigma.m", "phi.m")
+# double size of params with temperature p covariates
+# params2 <- params
+# params2$p_cov2 <- 1
+# params2$p_cov3 <- 2
+# params <- rbind(params, params2)
+params <- rbind(params, params, params, params)
+
 params$param_row <- 1:nrow(params)
-params <- params[sample(1:nrow(params)), ]
+params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
 dataIN <- c("dat", "params")
@@ -98,16 +132,12 @@ stopCluster(cl)
 
 saveRDS(test, file = "ssskipcov_simple.rds")
 
-
-
-
-
 # calculate null hypotheses for M for different species
-ETigSwalCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
-                        cpus_per_node = 8, nodes = 4, 
-                        data_file = "dataIN.RData", 
-                        # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
-                        output = "raw")
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                          cpus_per_node = 8, nodes = 4, 
+                          data_file = "dataIN.RData", 
+                          # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
+                          output = "raw")
 
 
 # Next step, go through processSlurmCov.R to choose best site_cov for species over all years
@@ -149,7 +179,6 @@ for (i in 1:length(outList)){
     out$npar <- NA
     out$maxNest <- NA
     out$medP <- NA
-    out$nRun <- outList[[i]][[1]]$nRun
   }else{
     out$npar <- outList[[i]][[1]]$npar
     out$maxNest <- round(max(outList[[i]][[1]]$N.est))
@@ -168,7 +197,7 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr1119")
+slurm_codes <- c("slr476")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -203,177 +232,52 @@ for (i in 1:length(outList)){
     if (is.na(out$ll.val)){
       out$npar <- NA
       out$maxNest <- NA
+      out$medP <- NA
+
     }else{
       out$npar <- outList[[i]]$npar
       out$maxNest <- round(max(outList[[i]]$N.est))
+      out$medP <- round(median(outList[[i]]$p.est), 3)
     }
     out$time <- as.double(outList[[i]]$time, units = "mins")
+    out$nRun <- outList[[i]]$nRun
   }
   outDF[[i]] <- out
 }
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
-###############################################
-# don't need index to select M, doing all at once for a species
-# index <- which(baselineDF$M == 2)
-# slurm_out2 <- slurm_out[c(index)]
 
-species <- outList[[1]][[1]]$pars$species
-slurm_out2 <- outList
-# simulate data from best-fit model parameters for each year
-dat <- SpeciesData(species)
-nsim <- 100
-SampleList <- vector("list", length = length(slurm_out2)*nsim)
-# make bootstrap data simulations for each model x 100
-for (bs in 1:length(SampleList)){
-  mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
-  nullFit <- slurm_out2[[mod]][[1]]    # list index 1 added for non-slurm output, not sure why different
-  # building output list
-  SampleList[[bs]]$pars <- nullFit$pars
-  # move on to next model if ll.val is NA
-  if (is.na(nullFit$ll.val)){
-    SampleList[[bs]]$ll.val <- NA
-    SampleList[[bs]]$npar <- NA
-    next
-  }else{
-    SampleList[[bs]]$ll.val <- nullFit$ll.val
-    SampleList[[bs]]$npar <- nullFit$npar
-  }
-  
-  species <- nullFit$pars$species
-  M <- nullFit$pars$M
-  list_index <- nullFit$pars$list_index
-  counts <- dat[[list_index]]$counts
-  raw_cutoff <- nullFit$pars$raw_cutoff
-  
-  # select sites with enough individuals counted
-  
-  siteRows <- which(rowSums(counts, na.rm = TRUE) >= raw_cutoff)
-  surv_present <- which(apply(counts, 1, function(x) length(which(x > 0))) >= 3)
-  siteRows <- siteRows[which(siteRows %in% surv_present)]
-  counts <- counts[siteRows, ]
-  
-  S <<- dim(counts)[1] 
-  K <<- dim(counts)[2]  
-  TIME <<- dim(counts)[2]
-  
-  N.est <- nullFit$N.est
-  phi.est <- nullFit$phi.est[1,1,1]
-  c0.est <- nullFit$cest[1]
-  c1.est <- nullFit$cest[2]
-  b0.est <- nullFit$b0.est
-  b1.est <- nullFit$b1.est
-  d0.est <- nullFit$d0.est
-  d1.est <- nullFit$d1.est
-  sigma.est <- nullFit$sigma.est
-  w.est <- nullFit$w.est
-  
-  simData <- list()
-  
-  N.tr <- rpois(S, N.est) 
-  #problem with large N.est creating NA's in rpois
-    if (length(which(is.na(N.tr))) > 0){
-      SampleList[[bs]]$ll.val <- NA
-      SampleList[[bs]]$npar <- NA
-      next
-    }
-  
-  phi.tr <- matrix(phi.est, TIME-1, TIME-1)
-  
-  cov.p_vary <- array(runif(S*TIME, -1, 1), c(S, TIME))
-  
-  c0.tr <- c0.est
-  c1.tr <- c1.est
-  p_vary.tr <- expo(c0.tr + c1.tr*cov.p_vary)
-  
-  cov.site_all <- rnorm(S)
-  b0.tr <- matrix(rep(b0.est, S), ncol = M, byrow = TRUE)
-  b1.tr <- b1.est
-  mu.tr <- exp(b0.tr + b1.tr*cov.site_all)
-  d0.tr <- d0.est
-  d1.tr <- d1.est
-  sd.tr <- sigma.est
-  
-  if (ncol(w.est) == 1){
-    w.tr <- w.est
-  }else{
-    w.tr <- matrix(NA, ncol = M, nrow = S)
-    for(site in 1:S){
-      w.tr[site,] <- lgp(d0.tr + d1.tr * cov.site_all[site]) 
-    }    
-  }
-  
-  betta.tr <- matrix(0, S, TIME)
-  if (M == 1){
-    for(s in 1:S){
-      betta.tr[s,] <-  c(pnorm(1, mean=mu.tr[s], sd=sd.tr[s]),
-                         pnorm(2:(TIME-1),mean=mu.tr[s],sd=sd.tr[s])-pnorm(1:(TIME-2), mean=mu.tr[s], sd=sd.tr[s]),
-                         1-pnorm(TIME-1,mean=mu.tr[s],sd=sd.tr[s]))
-    }
-  }else{
-    for(s in 1:S){
-      betta.site <- rep(0,TIME)
-      for(m in 1:M){
-        betta.site <- betta.site + c(w.tr[s,m]*c(pnorm(1,mean=mu.tr[s,m],sd=sd.tr[s,m]),
-                                                 pnorm(2:(TIME-1), mean=mu.tr[s,m], sd=sd.tr[s,m])-pnorm(1:(TIME-2),
-                                                                                                         mean=mu.tr[s,m],sd=sd.tr[s,m]), 1-pnorm(TIME-1,mean=mu.tr[s,m],sd=sd.tr[s,m])))
-      }
-      betta.tr[s,] <- betta.site
-    }
-  }
-  
-  
-  
-  lambda.tr <- array(0, c(S, TIME))
-  counts_all <- array(0,c(S, TIME))
-  
-  for(i in 1:S){
-    
-    lambda.tr[i,] <- N.tr[i]*betta.tr[i,]
-    counts_all[i,] <- rpois(TIME, lambda.tr[i,]*p_vary.tr[i,])	
-    
-    for(j in 2:TIME){
-      for(b in 1:(j-1)){
-        lambda.tr[i,j] <- lambda.tr[i,j] + N.tr[i]*betta.tr[i,b]*prod(phi.tr[b,b:(j-1)])
-      }
-      counts_all[i,j] <- rpois(1,lambda.tr[i,j]*p_vary.tr[i,j])
-    }
-  }
-  #drop records to approximate rate of missing survey each week
-  
-  counts_missing <- array(0, c(S, TIME))
-  
-  PropSurv <- function(vec){
-    prop <- length(which(is.na(vec) == FALSE))/length(vec)
-    return(prop)
-  }
-  FreqSurv <- apply(counts, 2, PropSurv)
-  for (s in 1:S){
-    counts_missing[s,] <- rbinom(TIME, 1, FreqSurv)
-  }
-  counts_missing[counts_missing == 0] <- NA
-  counts_missing <- counts_all * counts_missing
-  counts_missing[is.na(counts_missing)] <- -1 #reassign NA for C program
-  
-  
-  simData$counts <- counts_missing
-  simData$p_cov <- cov.p_vary
-  simData$site_cov <- cov.site_all
-  
-  SampleList[[bs]]$simData <- simData
-} #close Sample for loop
+
+saveRDS(slurm_out, "LWSslurmcovs.rds")
+
+##################################################
+# when run multiple time, variation in loglik and parameters for same M
+# choose best model, then simulate data and compare to M+1 for LRT to choose M
+
+# bestmods will be used for LRT statistic to compare to null distribution from simulations
+bestmods <- baselineDF %>% group_by(list_index, M) %>%
+  filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  arrange(list_index)
+
+# nullmods are model fits from which data is simulated 
+nullmods <- bestmods %>% group_by(list_index) %>% filter(M < max(M))
+
+simFits <- slurm_out[c(nullmods$model)]
+
+###############################################
+# get simulated data from null hypotheses for M (# of generations in a year)
+
+# use only 50 nsims to start
+SampleList <- SimNullData(simFits, nsim = 50, spec_data = dat)
+
 
 saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed = TRUE), "simdata.rds", sep = ""))
 
 
-}
-
-
-
-
-SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
+# SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
 # data_file Rdata
+
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
 
@@ -381,25 +285,99 @@ save(list = dataIN, file = "dataIN.RData")
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
 
-cl <- makeCluster(4)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  library(StopoverCode) #on linux
-  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-  load("dataIN.RData")
-})
-time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGeneration)})
-stopCluster(cl)
-
-saveRDS(test, file = "HobomokSkipperBSmod.rds")
+# cl <- makeCluster(4)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   library(StopoverCode) #on linux
+#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+#   load("dataIN.RData")
+# })
+# time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGeneration)})
+# stopCluster(cl)
+# 
+# saveRDS(test, file = "HobomokSkipperBSmod.rds")
 
 # calculate null hypotheses for same species, different years
-peckskip <- slurm_apply(f = SlurmGeneration, params = paramIN, 
-                   cpus_per_node = 8, nodes = 2, 
+lwsBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
+                   cpus_per_node = 8, nodes = 4, 
                    data_file = "dataIN.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
+
+
+
+
+# extract data from SlurmGeneration results
+slurm_codes <- c("slr69")
+slurm_out <- list()
+# setwd("slurmCovOutput")
+
+for (j in 1:length(slurm_codes)){
+  missing_files <- c()
+  tmpEnv <- new.env()
+  for (i in 0:11) {
+    fname <- paste0(slurm_codes[j], "_", i, 
+                    ".RData")
+    if (fname %in% dir()) {
+      load(fname, envir = tmpEnv)
+      slurm_out <- c(slurm_out, get(".rslurm_result", 
+                                    envir = tmpEnv))
+    }
+    else {
+      missing_files <- c(missing_files, fname)
+    }
+  }
+}
+test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
+# setwd("../")
+
+outList <- slurm_out
+outDF <- list()
+for (i in 1:length(outList)){
+  if (length(outList[[i]]) == 1){
+    out <- NA
+  }else{
+    out <- outList[[i]]$pars
+    out$model <- outList[[i]]$model
+    out$ll.val <- outList[[i]]$ll.val
+    if (is.na(out$ll.val)){
+      out$npar <- NA
+      out$maxNest <- NA
+      out$medP <- NA
+      out$obsM <- NA
+      
+    }else{
+      out$npar <- outList[[i]]$npar
+      out$maxNest <- round(max(outList[[i]]$N.est))
+      out$medP <- round(median(outList[[i]]$p.est), 3)
+      out$obsM <- dim(outList[[i]]$mu.est)[2]
+    }
+    out$time <- as.double(outList[[i]]$time, units = "mins")
+    out$nRun <- outList[[i]]$nRun
+  }
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+BSmods <- outDF
+
+
+
+# M's not accurate
+BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
+BSmods <- BSmods %>% filter(param_row == 12)
+
+
+tests <- baselineDF[c(2, 3, 7),]
+baselineDF <- tests[c(3, 1), ]
+# baselineDF <- tests[c(3, 2), ]
+
+
+
+BSpval(nullM = 2, spec = species) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
+
+# if p > 0.05ish, then no difference between test of null M vs M+1, therefore simpler model is favored.
 
