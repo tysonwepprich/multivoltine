@@ -43,7 +43,7 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr7743")
+slurm_codes <- c("slr3941")
 slurm_out <- list()
 # setwd("slurmCovOutput/sesyncResults")
 
@@ -103,7 +103,7 @@ covTest$AIC <- -2 * covTest$ll.val + 2 * covTest$npar
 test <- covTest %>%
   group_by(list_index, M, raw_cutoff) %>%
   mutate(weight1 = exp(-0.5 * (AIC - min(AIC)))) %>%
-  mutate(weight = weight1 / sum(weight1))
+  mutate(weight = round(weight1 / sum(weight1), 3))
 
 test2 <- test %>%
   select(-species, -weight1) %>%

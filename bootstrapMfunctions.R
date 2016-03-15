@@ -16,6 +16,7 @@ library(reshape)
 library(reshape2)
 library(data.table)
 
+#testing change
 
 # Eleni's functions
 # this was replaced by 'StopoverCode' package, loaded with library
@@ -24,12 +25,125 @@ library(data.table)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-# library(StopoverCode)
+library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-devtools::load_all("StopoverCode", recompile = TRUE)
+# devtools::load_all("StopoverCode", recompile = TRUE)
 
+
+# Output list of counts, survey covariates, and site covariates for each year 1998-2012
+SpeciesDataP1 <- function(species){
+  # Array of species counts (1 species x sites x years)
+  # Covariate array to match
+  
+  ##########
+  #DATA PREP
+  ##########
+  
+  data <- fread("data/data.trim.csv", header = TRUE)
+  # data <- data[, list(SeqID, SiteID.x, SiteDate, Week, Total, CheckListKey, CommonName)]
+  setnames(data,"SiteID.x","SiteID")
+  data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
+  data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
+  
+  #Site covariates for mu, weights
+  #GDD from Daymet daily temperature min/max
+  gdd <- readRDS("data/growingDD_Daymet.RDS")
+  names(gdd)[5] <- "SiteID"
+  gdd$SiteID <- formatC(as.numeric(gdd$SiteID), width = 3, format = "d", flag = "0")
+  gdd_summary <- gdd %>%
+    group_by(SiteID, year) %>%
+    summarise(YearGDD = max(cumdegday),
+              SpringGDD = max(cumdegday[yday < 100], na.rm = TRUE), 
+              SummerGDD = max(cumdegday[yday < 200], na.rm = TRUE),
+              FallGDD = max(cumdegday[yday < 300], na.rm = TRUE))
+  
+  sites <- read_csv("data/OHsites_reconciled.csv")
+  names(sites)[1] <- "SiteID"
+  sites$SiteID <- formatC(sites$SiteID, width = 3, format = "d", flag = "0")
+  
+  # resolve sites not matching between 3 datasets
+  masterSites <- merge(unique(sites[, "SiteID"]), unique(gdd_summary[, "SiteID", with = FALSE]))
+  masterSites <- merge(masterSites, unique(data[, "SiteID", with = FALSE]))
+  
+  data <- data[which(data$SiteID %in% masterSites$SiteID), ]
+  sites <- sites[which(sites$SiteID %in% masterSites$SiteID), ]
+  gdd_summary <- gdd_summary[which(gdd_summary$SiteID %in% masterSites$SiteID), ]
+  
+  data[, Year := year(SiteDate)]
+  data[, `:=` (WeekPerYear = length(unique(Week)),
+               SurvPerYear = length(unique(SeqID))), 
+       by = list(SiteID, Year)]
+  dat <- data[WeekPerYear >= 15]
+  
+  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
+  dat <- dat[CommonName == species][Year >= 1998]
+  
+  
+  years <- sort(unique(dat$Year))
+  dat_list <- as.list(years)
+  for (i in 1:length(dat_list)){
+    
+    yr <- years[i]
+    spdat <- dat[Year == yr]
+    spdat <- unique(spdat)
+    #   setkey(spdat, SeqID)
+    
+    survs <- surveys[year(SiteDate) == yr]
+    #Add zeros to surveys when species not counted during a survey
+    
+    test <- merge(survs, spdat, by = c("SiteID", "SiteDate", "Week", "SeqID", "Year"), all.x = TRUE)
+    counts <- test[, c("SiteID", "SiteDate", "Week", "SeqID", "Total", "Year"), with = FALSE]
+    counts$Total <- mapvalues(counts[,Total], from = NA, to = 0)
+    
+    #overachieving volunteers going out more than once a week!
+    #choose first one, not averaging, easier to match with covariates
+    counts_uniq <- counts %>% 
+      group_by(SiteID, Week) %>%
+      arrange(SiteDate) %>%
+      summarise(Total = Total[1])
+    
+    count_matrix <- as.matrix(cast(counts_uniq, SiteID ~ Week, value = "Total"))
+    count_matrix <- round(count_matrix)
+    count_matrix[is.na(count_matrix)] <- NA
+    
+    dat_list[[i]]$counts <- count_matrix
+    
+    
+    #covariates: took em out for this one
+    
+    
+    #spring and yearly GDD have lowest correlation, but still .62.
+    gdd_covs <- gdd_summary[year == yr]
+    
+    cov_sites <- merge(sites, gdd_covs, by = "SiteID", all.x = TRUE)
+    
+    # gdd missing from Catawba Island 103
+    # use gdd from closest other site
+    # Turn this into a function!
+    rowNA <- which(is.na(cov_sites$SpringGDD))
+    if (length(rowNA) > 0){
+      d <- dist(cbind(cov_sites$lat, cov_sites$lon), upper = TRUE)
+      dists <- as.matrix(d)[rowNA,]
+      dists[which(dists == 0)] <- NA
+      mindist <- apply(dists, 1, min, na.rm = TRUE)
+      for (md in 1:length(rowNA)){
+        rowReplace <- which(dists[md, ] == mindist[md])
+        cov_sites[rowNA[md], c("Year","YearGDD", "SpringGDD", "SummerGDD", "FallGDD")] <-  cov_sites[rowReplace, c("Year", "YearGDD", "SpringGDD", "SummerGDD", "FallGDD")]
+      }
+    }
+    cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(survs$SiteID)), ]
+    cov_sites$YearGDD <- scale(cov_sites$YearGDD)
+    cov_sites$SpringGDD <- scale(cov_sites$SpringGDD)
+    cov_sites$SummerGDD <- scale(cov_sites$SummerGDD)
+    cov_sites$FallGDD <- scale(cov_sites$FallGDD)
+    
+    dat_list[[i]]$site_covs <- cov_sites
+    dat_list[[i]]$surv_covs <- NA
+  }
+  return(dat_list)
+}
 
 # Data prep function, input CommonName
 # Output list of counts, survey covariates, and site covariates for each year 1998-2012
@@ -48,22 +162,16 @@ SpeciesData <- function(species){
   data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
   
   #Site covariates for mu, weights
-  #GDD from Dan (or maybe Leslie/Rick Reeves?)
-  gdd <- fread("data/GddResultsAllSites_1996_2012.csv")
-  names(gdd)[1] <- "SiteID"
-  gdd$SiteID <- formatC(gdd$SiteID, width = 3, format = "d", flag = "0")
-  gdd$Date <- parse_date(gdd$full_date, format = "%m/%d/%Y")
-  gdd$Year <- year(gdd$Date)
+  #GDD from Daymet daily temperature min/max
+  gdd <- readRDS("data/growingDD_Daymet.RDS")
+  names(gdd)[5] <- "SiteID"
+  gdd$SiteID <- formatC(as.numeric(gdd$SiteID), width = 3, format = "d", flag = "0")
   gdd_summary <- gdd %>%
-    filter(todayGDD >= 0) %>%
-    group_by(SiteID, Year) %>%
-    summarise(YearGDD = max(GDD),
-              SpringGDD = max(GDD[ordinalEndDayOfYear < 100], na.rm = TRUE), #negative infinity popping up????
-              SummerGDD = max(GDD[ordinalEndDayOfYear < 200], na.rm = TRUE),
-              FallGDD = max(GDD[ordinalEndDayOfYear < 300], na.rm = TRUE))
-  
-  gdd_summary[SpringGDD == -Inf]$SpringGDD <- NA
-  
+    group_by(SiteID, year) %>%
+    summarise(YearGDD = max(cumdegday),
+              SpringGDD = max(cumdegday[yday < 100], na.rm = TRUE), 
+              SummerGDD = max(cumdegday[yday < 200], na.rm = TRUE),
+              FallGDD = max(cumdegday[yday < 300], na.rm = TRUE))
   
   sites <- read_csv("data/OHsites_reconciled.csv")
   names(sites)[1] <- "SiteID"
@@ -180,7 +288,7 @@ SpeciesData <- function(species){
 
     
     #spring and yearly GDD have lowest correlation, but still .62.
-    gdd_covs <- gdd_summary[Year == yr]
+    gdd_covs <- gdd_summary[year == yr]
     
     cov_sites <- merge(sites, gdd_covs, by = "SiteID", all.x = TRUE)
     
@@ -199,6 +307,10 @@ SpeciesData <- function(species){
       }
     }
     cov_sites <- cov_sites[which(cov_sites$SiteID %in% unique(survs$SiteID)), ]
+    cov_sites$YearGDD <- scale(cov_sites$YearGDD)
+    cov_sites$SpringGDD <- scale(cov_sites$SpringGDD)
+    cov_sites$SummerGDD <- scale(cov_sites$SummerGDD)
+    cov_sites$FallGDD <- scale(cov_sites$FallGDD)
     
     dat_list[[i]]$site_covs <- cov_sites
     
@@ -279,9 +391,9 @@ SlurmCovs <- function(nRun){
   }else{
     mu.m <<- "cov"
     w.m <<- "cov"
-    if (site_covs == "AnnGDD") s_cov <- scale(cov_sites$YearGDD)
-    if (site_covs == "SprGDD") s_cov <- scale(cov_sites$SpringGDD)
-    if (site_covs == "lat") s_cov <- scale(cov_sites$lat)
+    if (site_covs == "AnnGDD") s_cov <- cov_sites$YearGDD
+    if (site_covs == "SprGDD") s_cov <- cov_sites$SpringGDD
+    if (site_covs == "lat") s_cov <- cov_sites$lat
     s_cov <- s_cov[siteRows]
   }
   ALLcov.w <- s_cov
@@ -321,6 +433,120 @@ SlurmCovs <- function(nRun){
   temp$pars <- pars
   temp$nRun <- nRun
   out[[1]] <- temp
+  return(out)
+}
+
+
+# Fit models for null and alternative (M + 1) for each simulated dataset
+SlurmGenerationP1 <- function(nRun){
+  out <- vector("list", length = 2)
+  BSdata <- SampleList[[nRun]]
+  if (length(which("simData" %in% names(BSdata))) == 0){ # if no simData made, move along (happens if ll.val = NA or rpois error (N.est too big))
+    out[[1]]$pars <- BSdata$pars
+    out[[1]]$ll.val <- NA
+    out[[1]]$nRun <- nRun
+    out[[2]] <- NULL
+  }else{
+    # parameters
+    pars <- BSdata$pars
+    species <- pars$species
+    raw_cutoff <- pars$raw_cutoff
+    # p_cov1 <- pars$p_cov1
+    # p_cov2 <- pars$p_cov2
+    site_covs <- pars$site_covs
+    M <<- pars$M
+    sigma.m <<- pars$sigma.m
+    phi.m <<- pars$phi.m
+    p.m <<- "common"
+    w.m <<- "cov"
+    mu.m <<- "cov"
+    ### data prep ###
+    counts <<- BSdata$simData$counts
+    
+    S <<- dim(counts)[1] 
+    K <<- dim(counts)[2]  
+    TIME <<- dim(counts)[2]
+    
+    # p_cov <- BSdata$simData$p_cov
+    # p_cov[which(counts == -1)] <- NA
+    
+    # cov.p <- array(data = p_cov, dim = c(dim(p_cov), 1))
+    # qp <- dim(cov.p)[3]
+    # for(q in 1:qp) cov.p[,,q] <- scale(cov.p[,,q])[1:S,1:K]
+    # cov.p[is.na(cov.p)] <- -1
+    # ALLcov.p <- cov.p
+    
+    # Time (week) covariate for phi
+    cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))), S, K-1, byrow=TRUE) 
+    ALLcov.phi <- cov.phi
+    
+    s_cov <- BSdata$simData$site_cov
+    ALLcov.w <- s_cov
+    ALLcov.mu <- s_cov
+    
+    cov.w <<- ALLcov.w
+    cov.mu <<- ALLcov.mu
+    # cov.p <<- ALLcov.p
+    cov.phi <<- ALLcov.phi
+    # qp <<- dim(cov.p)[3]
+    
+    
+    ####
+    # Fit null hypothesis for M
+    Tries <- 5
+    temp.fit <- list()
+    temp.ll <- rep(NA, Tries)
+    startTime <- Sys.time()
+    
+    for (k in 1:Tries){
+      start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+      pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+      temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+      temp.ll[k] <- temp.fit[[k]]$ll.val
+    }
+    
+    if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+      tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+      temp <-temp.fit[[tempchoose]]
+    }else{
+      temp <- list()
+      temp$ll.val <- NA
+    }
+    temp$model <- "null"
+    temp$time <- startTime - Sys.time()
+    temp$pars <- pars
+    temp$M <- M
+    out[[1]] <- temp
+    out[[1]]$nRun <- nRun
+    
+    # Fit alternative model
+    M <<- M + 1
+    Tries <- 5
+    temp.fit <- list()
+    temp.ll <- rep(NA, Tries)
+    startTime <- Sys.time()
+    
+    for (k in 1:Tries){
+      start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+      pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+      temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+      temp.ll[k] <- temp.fit[[k]]$ll.val
+    }
+    
+    if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+      tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+      temp <-temp.fit[[tempchoose]]
+    }else{
+      temp <- list()
+      temp$ll.val <- NA
+    }
+    temp$model <- "alt"
+    temp$time <- startTime - Sys.time()
+    temp$pars <- pars
+    temp$M <- M
+    out[[2]] <- temp
+    out[[2]]$nRun <- nRun
+  } #close ifelse
   return(out)
 }
 
@@ -454,13 +680,15 @@ BSpval <- function(nullM, spec){
   # problem when null mod generally doesn't fit, many alternative mods do
   
   BStests <- BSmods %>% filter(species == spec) %>% 
-    filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt") %>%
+    # filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt") %>%
     group_by(nRun) %>% mutate(NumSuccess = length(ll.val)) %>%
     filter(NumSuccess == 2)
   
   LRdistr <- BStests %>% group_by(nRun) %>%
     summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
-  B <- nrow(LRdistr)
+  # B <- nrow(LRdistr)
+  B <- nrow(LRdistr) - length(which(is.na(LRdistr$neg2logLam)))
+  
   # alpha <- 0.05
   origLR <- 2 * (origAlt - origNull)
   j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
@@ -468,7 +696,8 @@ BSpval <- function(nullM, spec){
   P <- 1 - j / (B + 1)
   return(P)
 }
-# if P > alpha, alternative hypothesis is better
+# if P < alpha, it means that the origLR is much higher than the null distribution we created
+# j would be high proportion of B, decreasing P. High P means that can't reject the Null.
 
 
 # expand.grid altered for integers, not just factors/characters
