@@ -3,3 +3,5 @@
 .RData
 dataIN.RData
 .sh
+.o
+.so
