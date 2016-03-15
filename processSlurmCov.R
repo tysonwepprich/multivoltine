@@ -108,12 +108,12 @@ test <- covTest %>%
 test2 <- test %>%
   select(-species, -weight1) %>%
   # filter(species == 11) %>%
-  arrange(AIC) %>%
+  arrange(list_index, M, AIC) %>%
   data.frame()
 
 # on average over years, does latitude or AnnGDD have higher weight 
 test3 <- test2 %>%
-  group_by(M, p_cov1) %>%
+  group_by(M, p_cov1, p_cov2, p_cov3, p_cov4, sigma.m) %>%
   summarise(mean_weight = mean(weight))
 
 a <- test2[, c("list_index", "site_covs", "M", "weight")]

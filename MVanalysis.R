@@ -12,14 +12,7 @@ source('bootstrapMfunctions.R')
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
-# i <- 16 #slr4158
-# i <- 15 #slr7296 
-# i <- 14 #slr7389 
-# i <- 13 #slr1826
-# i <- 12 #slr1965
-# i <- 10 #slr2023
-# i <- 2 #slr2085
-i <- 3 #slr2152
+i <- 15
 
 
 species <- allSpecies$CommonName[i]
@@ -32,7 +25,7 @@ dat <- SpeciesData(species)
 # for each species, select parameters
 # how much data available for modeling?
 
-count_cutoff <- 10
+count_cutoff <- 5
 surv_cutoff <- 3
 data_avail <- data.frame()
 for (j in 1:length(dat)){
@@ -52,19 +45,19 @@ for (j in 1:length(dat)){
 }
 
 
-list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 30])[1]
+list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 # list_index_min_data <- c(6, 9) # test problem with SSSkip 
 
 
 # choose parameter ranges
-raw_cutoff <- 10 # c(5, 10)
-p_cov1 <- 7 # c("none", 7, 9) # Select detection covariates here (1:7 possible)
-p_cov2 <- 5 #c("none", 5) # Select detection covariates here (1:7 possible)
-p_cov3 <- 9 #c("none", 2)
+raw_cutoff <- 5 # c(5, 10)
+p_cov1 <- "none" #c("none", 7) # Select detection covariates here (1:7 possible)
+p_cov2 <- "none" #c("none", 9) # Select detection covariates here (1:7 possible)
+p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
-M <- 3 #c(minBrood:maxBrood) #number of broods to estimate
-sigma.m <- "hom" #c("het", "hom")
+M <- c(minBrood:maxBrood) #number of broods to estimate
+sigma.m <- c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
 
 params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, p_cov3, p_cov4,
@@ -73,18 +66,19 @@ params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, 
 names(params) <- c("species", "list_index", "raw_cutoff", "p_cov1", "p_cov2", "p_cov3", "p_cov4",
                    "site_covs", "M", "sigma.m", "phi.m")
 params$param_row <- 1:nrow(params)
+params <- params[sample(1:nrow(params)), ]
 
 # data_file Rdata
 dataIN <- c("dat", "params")
 save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = sample(seq(1:nrow(params))))
+paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
-# single core
-system.time({
-  test <- lapply(paramIN$nRun, SlurmCovs)
-  })
+# # single core
+# system.time({
+#   test <- lapply(paramIN$nRun, SlurmCovs)
+#   })
 
 
 # multiscore
@@ -98,14 +92,13 @@ clusterEvalQ(cl, {
   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
   load("dataIN.RData")
 })
-test <- parLapply(cl, paramIN$nRun, SlurmCovs)
+test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
 stopCluster(cl)
 })
 
-saveRDS(test, file = "SSSKIP_covtest2.rds")
+saveRDS(test, file = "ssskipcov_simple.rds")
 
-saveRDS(test, file = "SilSpotSkippatch.rds")
-saveRDS(test, file = "RSPpatch.rds")
+
 
 
 
@@ -142,7 +135,7 @@ results <- list.files("slurmCovOutput/otherResults/")
 # for (res in 2:14){
 setwd("slurmCovOutput/otherResults/")
 temp <- readRDS(results[res])
-temp <- readRDS("SSSKIP_covtest2.rds")
+temp <- readRDS("ssskipcov_simple.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
