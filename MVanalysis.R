@@ -203,7 +203,7 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr2888")
+slurm_codes <- c("slr476")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -225,6 +225,9 @@ for (j in 1:length(slurm_codes)){
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
+
+slurm_out<- readRDS("LWSslurmcovs.rds")
+
 
 outList <- slurm_out
 outDF <- list()
@@ -253,181 +256,37 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
+
+
+saveRDS(slurm_out, "LWSslurmcovs.rds")
+
+##################################################
+# when run multiple time, variation in loglik and parameters for same M
+# choose best model, then simulate data and compare to M+1 for LRT to choose M
+
+# bestmods will be used for LRT statistic to compare to null distribution from simulations
+bestmods <- baselineDF %>% group_by(list_index, M) %>%
+  filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  arrange(list_index)
+
+# nullmods are model fits from which data is simulated 
+nullmods <- bestmods %>% group_by(list_index) %>% filter(M < max(M))
+
+simFits <- slurm_out[c(nullmods$model)]
+
 ###############################################
-# don't need index to select M, doing all at once for a species
-# index <- which(baselineDF$M == 2)
-# slurm_out2 <- slurm_out[c(index)]
+# get simulated data from null hypotheses for M (# of generations in a year)
 
-# species <- outList[[1]][[1]]$pars$species
+# use only 50 nsims to start
+SampleList <- SimNullData(simFits, nsim = 50, spec_data = dat)
 
-slurm_out2 <- outList[c(2, 3, 7)]
-# simulate data from best-fit model parameters for each year
-dat <- SpeciesData(species)
-nsim <- 100
-SampleList <- vector("list", length = length(slurm_out2)*nsim)
-# make bootstrap data simulations for each model x 100
-for (bs in 1:length(SampleList)){
-  mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
-  nullFit <- slurm_out2[[mod]] #[[1]]    # list index 1 added for non-slurm output, not sure why different
-  # building output list
-  SampleList[[bs]]$pars <- nullFit$pars
-  # move on to next model if ll.val is NA
-  if (is.na(nullFit$ll.val)){
-    SampleList[[bs]]$ll.val <- NA
-    SampleList[[bs]]$npar <- NA
-    next
-  }else{
-    SampleList[[bs]]$ll.val <- nullFit$ll.val
-    SampleList[[bs]]$npar <- nullFit$npar
-  }
-  
-  species <- nullFit$pars$species
-  M <- nullFit$pars$M
-  list_index <- nullFit$pars$list_index
-  counts <- dat[[list_index]]$counts
-  raw_cutoff <- nullFit$pars$raw_cutoff
-  
-  # select sites with enough individuals counted
-  
-  siteRows <- which(rowSums(counts, na.rm = TRUE) >= raw_cutoff)
-  surv_present <- which(apply(counts, 1, function(x) length(which(x > 0))) >= 3)
-  siteRows <- siteRows[which(siteRows %in% surv_present)]
-  counts <- counts[siteRows, ]
-  
-  S <<- dim(counts)[1] 
-  K <<- dim(counts)[2]  
-  TIME <<- dim(counts)[2]
-  
-  N.est <- nullFit$N.est
-  phi.est <- nullFit$phi.est[1,1,1]
-  if (is.null(nullFit$cest) == FALSE){
-    c0.est <- nullFit$cest[1]
-    c1.est <- nullFit$cest[2]
-  }
-  b0.est <- nullFit$b0.est
-  b1.est <- nullFit$b1.est
-  d0.est <- nullFit$d0.est
-  d1.est <- nullFit$d1.est
-  sigma.est <- nullFit$sigma.est
-  w.est <- nullFit$w.est
-  
-  simData <- list()
-  
-  N.tr <- rpois(S, N.est) 
-  #problem with large N.est creating NA's in rpois
-    if (length(which(is.na(N.tr))) > 0){
-      SampleList[[bs]]$ll.val <- NA
-      SampleList[[bs]]$npar <- NA
-      next
-    }
-  
-  phi.tr <- matrix(phi.est, TIME-1, TIME-1)
-  
-  if(is.null(nullFit$cest) == FALSE){
-    cov.p_vary <- array(runif(S*TIME, -1, 1), c(S, TIME))
-    c0.tr <- c0.est
-    c1.tr <- c1.est
-    p_vary.tr <- expo(c0.tr + c1.tr*cov.p_vary)
-  }
- 
-  
-  cov.site_all <- rnorm(S)
-  b0.tr <- matrix(rep(b0.est, S), ncol = M, byrow = TRUE)
-  b1.tr <- b1.est
-  mu.tr <- exp(b0.tr + b1.tr*cov.site_all)
-  d0.tr <- d0.est
-  d1.tr <- d1.est
-  sd.tr <- sigma.est
-  
-  if (ncol(w.est) == 1){
-    w.tr <- w.est
-  }else{
-    w.tr <- matrix(NA, ncol = M, nrow = S)
-    for(site in 1:S){
-      w.tr[site,] <- lgp(d0.tr + d1.tr * cov.site_all[site]) 
-    }    
-  }
-  
-  betta.tr <- matrix(0, S, TIME)
-  if (M == 1){
-    for(s in 1:S){
-      betta.tr[s,] <-  c(pnorm(1, mean=mu.tr[s], sd=sd.tr[s]),
-                         pnorm(2:(TIME-1),mean=mu.tr[s],sd=sd.tr[s])-pnorm(1:(TIME-2), mean=mu.tr[s], sd=sd.tr[s]),
-                         1-pnorm(TIME-1,mean=mu.tr[s],sd=sd.tr[s]))
-    }
-  }else{
-    for(s in 1:S){
-      betta.site <- rep(0,TIME)
-      for(m in 1:M){
-        betta.site <- betta.site + c(w.tr[s,m]*c(pnorm(1,mean=mu.tr[s,m],sd=sd.tr[s,m]),
-                                                 pnorm(2:(TIME-1), mean=mu.tr[s,m], sd=sd.tr[s,m])-pnorm(1:(TIME-2),
-                                                                                                         mean=mu.tr[s,m],sd=sd.tr[s,m]), 1-pnorm(TIME-1,mean=mu.tr[s,m],sd=sd.tr[s,m])))
-      }
-      betta.tr[s,] <- betta.site
-    }
-  }
-  
-  
-  
-  lambda.tr <- array(0, c(S, TIME))
-  counts_all <- array(0,c(S, TIME))
-  
-  for(i in 1:S){
-    
-    lambda.tr[i,] <- N.tr[i]*betta.tr[i,]
-    if(is.null(nullFit$cest)){
-      counts_all[i,] <- rpois(TIME, lambda.tr[i,])	
-    }else{
-    counts_all[i,] <- rpois(TIME, lambda.tr[i,]*p_vary.tr[i,])	
-    }
-    
-    for(j in 2:TIME){
-      for(b in 1:(j-1)){
-        lambda.tr[i,j] <- lambda.tr[i,j] + N.tr[i]*betta.tr[i,b]*prod(phi.tr[b,b:(j-1)])
-      }
-      if(is.null(nullFit$cest)){
-        counts_all[i,j] <- rpois(1,lambda.tr[i,j])
-      }else{
-      counts_all[i,j] <- rpois(1,lambda.tr[i,j]*p_vary.tr[i,j])
-      }
-    }
-  }
-  #drop records to approximate rate of missing survey each week
-  
-  counts_missing <- array(0, c(S, TIME))
-  
-  PropSurv <- function(vec){
-    prop <- length(which(is.na(vec) == FALSE))/length(vec)
-    return(prop)
-  }
-  FreqSurv <- apply(counts, 2, PropSurv)
-  for (s in 1:S){
-    counts_missing[s,] <- rbinom(TIME, 1, FreqSurv)
-  }
-  counts_missing[counts_missing == 0] <- NA
-  counts_missing <- counts_all * counts_missing
-  counts_missing[is.na(counts_missing)] <- -1 #reassign NA for C program
-  
-  
-  simData$counts <- counts_missing
-  if (is.null(nullFit$cest) == FALSE){
-  simData$p_cov <- cov.p_vary
-  }
-  simData$site_cov <- cov.site_all
-  
-  SampleList[[bs]]$simData <- simData
-} #close Sample for loop
 
 saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed = TRUE), "simdata.rds", sep = ""))
 
 
-# }
-
-
-
-
-SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
+# SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
 # data_file Rdata
+
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
 
@@ -461,7 +320,7 @@ lwsBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr69")
+slurm_codes <- c("slr5332")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -520,14 +379,32 @@ BSmods <- outDF
 BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
 BSmods <- BSmods %>% filter(param_row == 12)
 
+# from baselineDF from slurmCov
+bestmods <- baselineDF %>% group_by(list_index, M) %>%
+  filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  arrange(list_index)
+
 
 tests <- baselineDF[c(2, 3, 7),]
 baselineDF <- tests[c(3, 1), ]
 # baselineDF <- tests[c(3, 2), ]
 
-
-
-BSpval(nullM = 2, spec = species) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
-
+listP <- list()
+for (i in 1:length(unique(bestmods$list_index))){
+  tempindex <- unique(bestmods$list_index)[i]
+  tempbaselineDF <- bestmods %>% filter(list_index == tempindex)
+  testM <- unique(tempbaselineDF$M)
+  testM <- testM[-which(testM == max(testM))]
+  out <- data.frame()
+  for (m in testM){
+    tempBSmods <- BSmods %>% filter(list_index == tempindex & M == m)
+    pval <- BSpval(nullM = m, spec = species, BSmods = tempBSmods, baselineDF = tempbaselineDF) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
+    out <- rbind(out, pval)
+  }
+  out$list_index <- tempindex
+  listP[[i]] <- out
+}
+mtest <- rbindlist(listP) %>% arrange(list_index)
+saveRDS(mtest, "LWSmtest.rds")
 # if p > 0.05ish, then no difference between test of null M vs M+1, therefore simpler model is favored.
 
