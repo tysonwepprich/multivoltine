@@ -220,6 +220,9 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
+slurm_out<- readRDS("LWSslurmcovs.rds")
+
+
 outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
@@ -311,7 +314,7 @@ lwsBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr69")
+slurm_codes <- c("slr5332")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -370,14 +373,32 @@ BSmods <- outDF
 BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
 BSmods <- BSmods %>% filter(param_row == 12)
 
+# from baselineDF from slurmCov
+bestmods <- baselineDF %>% group_by(list_index, M) %>%
+  filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  arrange(list_index)
+
 
 tests <- baselineDF[c(2, 3, 7),]
 baselineDF <- tests[c(3, 1), ]
 # baselineDF <- tests[c(3, 2), ]
 
-
-
-BSpval(nullM = 2, spec = species) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
-
+listP <- list()
+for (i in 1:length(unique(bestmods$list_index))){
+  tempindex <- unique(bestmods$list_index)[i]
+  tempbaselineDF <- bestmods %>% filter(list_index == tempindex)
+  testM <- unique(tempbaselineDF$M)
+  testM <- testM[-which(testM == max(testM))]
+  out <- data.frame()
+  for (m in testM){
+    tempBSmods <- BSmods %>% filter(list_index == tempindex & M == m)
+    pval <- BSpval(nullM = m, spec = species, BSmods = tempBSmods, baselineDF = tempbaselineDF) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
+    out <- rbind(out, pval)
+  }
+  out$list_index <- tempindex
+  listP[[i]] <- out
+}
+mtest <- rbindlist(listP) %>% arrange(list_index)
+saveRDS(mtest, "LWSmtest.rds")
 # if p > 0.05ish, then no difference between test of null M vs M+1, therefore simpler model is favored.
 

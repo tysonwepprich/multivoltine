@@ -844,7 +844,7 @@ SlurmGeneration <- function(nRun){
 # alpha = 1 - j / (B+1)
 
 
-BSpval <- function(nullM, spec){
+BSpval <- function(nullM, spec, BSmods, baselineDF){
   nullM <- nullM
   spec <- spec
   origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
@@ -855,6 +855,10 @@ BSpval <- function(nullM, spec){
     # filter(M == nullM & model == "null" | M == nullM + 1 & model == "alt") %>%
     group_by(nRun) %>% mutate(NumSuccess = length(ll.val)) %>%
     filter(NumSuccess == 2)
+    
+  BStestNA <- BStests %>%
+    group_by(model) %>%
+    summarise(modNAfit = length(which(is.na(ll.val))))
   
   LRdistr <- BStests %>% group_by(nRun) %>%
     summarise(neg2logLam = 2 * (ll.val[model == "alt"] - ll.val[model == "null"]))
@@ -866,7 +870,8 @@ BSpval <- function(nullM, spec){
   j <- length(which(LRdistr$neg2logLam < origLR$ll.val)) 
   # P <- 1 - (3 * j - 1) / (3 * B + 1)
   P <- 1 - j / (B + 1)
-  return(P)
+  out <- data.frame(nullM = nullM, pval = P, nfits = B, nullNA = BStestNA$modNAfit[BStestNA$model == "null"], altNA = BStestNA$modNAfit[BStestNA$model == "alt"])
+  return(out)
 }
 # if P < alpha, it means that the origLR is much higher than the null distribution we created
 # j would be high proportion of B, decreasing P. High P means that can't reject the Null.
