@@ -37,12 +37,12 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 10
+i <- 12
 
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
-maxBrood <- allSpecies$MaxBrood[i]
+maxBrood <- allSpecies$MaxBrood[i] + 1
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
 # dat <- SpeciesData(species)
@@ -115,7 +115,7 @@ paramIN <- data.frame(nRun = seq(1:nrow(params)))
 #   })
 
 
-# multiscore
+# multicore
 system.time({
 cl <- makeCluster(4)
 clusterEvalQ(cl, {
@@ -130,7 +130,7 @@ test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
 stopCluster(cl)
 })
 
-saveRDS(test, file = "ssskipcov_simple.rds")
+saveRDS(test, file = "npecovs.rds")
 
 # calculate null hypotheses for M for different species
 testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
@@ -160,12 +160,12 @@ testCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 
-results <- list.files("slurmCovOutput/otherResults/")
-
-# for (res in 2:14){
-setwd("slurmCovOutput/otherResults/")
-temp <- readRDS(results[res])
-temp <- readRDS("ssskipcov_simple.rds")
+# results <- list.files("slurmCovOutput/otherResults/")
+# 
+# # for (res in 2:14){
+# setwd("slurmCovOutput/otherResults/")
+# temp <- readRDS(results[res])
+temp <- readRDS("nbdcovs.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -191,7 +191,7 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
-setwd("../../")
+# setwd("../../")
 
 #############################################
 
