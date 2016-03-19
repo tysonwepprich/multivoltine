@@ -37,12 +37,12 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 10
+i <- 2
 
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
-maxBrood <- allSpecies$MaxBrood[i]
+maxBrood <- allSpecies$MaxBrood[i] + 1
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
 # dat <- SpeciesData(species)
@@ -103,17 +103,17 @@ params$param_row <- 1:nrow(params)
 params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
-dataIN <- c("dat", "params")
-save(list = dataIN, file = "dataIN.RData")
+dataIN1 <- c("dat", "params")
+save(list = dataIN1, file = "dataIN1.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = seq(1:nrow(params)))
+paramIN1 <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # calculate null hypotheses for M for different species
-testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN1, 
                           cpus_per_node = 8, nodes = 4, 
-                          data_file = "dataIN.RData", 
+                          data_file = "dataIN1.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -203,7 +203,7 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr476")
+slurm_codes <- c("slr2241")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -226,7 +226,7 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-slurm_out<- readRDS("LWSslurmcovs.rds")
+slurm_out<- readRDS("RSPslurmcovs.rds")
 
 
 outList <- slurm_out
@@ -258,7 +258,7 @@ outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
 
 
-saveRDS(slurm_out, "LWSslurmcovs.rds")
+saveRDS(slurm_out, "RSPslurmcovs.rds")
 
 ##################################################
 # when run multiple time, variation in loglik and parameters for same M
@@ -267,6 +267,7 @@ saveRDS(slurm_out, "LWSslurmcovs.rds")
 # bestmods will be used for LRT statistic to compare to null distribution from simulations
 bestmods <- baselineDF %>% group_by(list_index, M) %>%
   filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  filter(maxNest < 1000 * median(baselineDF$maxNest)) %>%    ##trying to deal with huge N estimates
   arrange(list_index)
 
 # nullmods are model fits from which data is simulated 
@@ -309,8 +310,8 @@ paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so
 # saveRDS(test, file = "HobomokSkipperBSmod.rds")
 
 # calculate null hypotheses for same species, different years
-lwsBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
-                   cpus_per_node = 8, nodes = 4, 
+rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
+                   cpus_per_node = 8, nodes = 3, 
                    data_file = "dataIN.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
@@ -320,7 +321,7 @@ lwsBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr5332")
+slurm_codes <- c("slr2241")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -377,16 +378,47 @@ BSmods <- outDF
 
 # M's not accurate
 BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
-BSmods <- BSmods %>% filter(param_row == 12)
+# BSmods <- BSmods %>% filter(param_row == 12)
 
 # from baselineDF from slurmCov
+slurm_out<- readRDS("RSPslurmcovs.rds")
+
+outList <- slurm_out
+outDF <- list()
+for (i in 1:length(outList)){
+  if (length(outList[[i]]) == 1){
+    out <- NA
+  }else{
+    out <- outList[[i]]$pars
+    out$model <- i
+    out$ll.val <- outList[[i]]$ll.val
+    if (is.na(out$ll.val)){
+      out$npar <- NA
+      out$maxNest <- NA
+      out$medP <- NA
+      
+    }else{
+      out$npar <- outList[[i]]$npar
+      out$maxNest <- round(max(outList[[i]]$N.est))
+      out$medP <- round(median(outList[[i]]$p.est), 3)
+    }
+    out$time <- as.double(outList[[i]]$time, units = "mins")
+    out$nRun <- outList[[i]]$nRun
+  }
+  outDF[[i]] <- out
+}
+
+outDF <- do.call("rbind", outDF)
+baselineDF <- outDF
+
+
 bestmods <- baselineDF %>% group_by(list_index, M) %>%
   filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
   arrange(list_index)
 
 
-tests <- baselineDF[c(2, 3, 7),]
-baselineDF <- tests[c(3, 1), ]
+# tests <- baselineDF[c(2, 3, 7),]
+# baselineDF <- tests[c(3, 1), ]
 # baselineDF <- tests[c(3, 2), ]
 
 listP <- list()
@@ -397,8 +429,13 @@ for (i in 1:length(unique(bestmods$list_index))){
   testM <- testM[-which(testM == max(testM))]
   out <- data.frame()
   for (m in testM){
-    tempBSmods <- BSmods %>% filter(list_index == tempindex & M == m)
-    pval <- BSpval(nullM = m, spec = species, BSmods = tempBSmods, baselineDF = tempbaselineDF) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
+    tempBSmods <- BSmods %>% filter(list_index == tempindex) %>%
+      filter(M == m & model == "null" | M == m + 1 & model == "alt")
+    if (nrow(tempBSmods) == 0){
+      pval <- data.frame(nullM = m, pval = NA, nfits = 0, nullNA = NA, altNA = NA)
+    } else {
+      pval <- BSpval(nullM = m, spec = species, BSmods = tempBSmods, baselineDF = tempbaselineDF) # also needs BSmods from fitting simulated data, and baselineDF from original fitting
+    }
     out <- rbind(out, pval)
   }
   out$list_index <- tempindex
