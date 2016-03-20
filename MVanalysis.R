@@ -19,16 +19,16 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 
 # 14 RSP 6698
-# 18 WIDW 3540
+# 18 WIDW 3540 
 # 16 Spice 3941
-# 19 Zab 1497
-# 17 Vice 1621
-# 13 Peck 1727
+# 19 Zab 1497 
+# 17 Vice 1621 
+# 13 Peck 1727 
 # 1 Black Swal 1933
 # 2 CWN 2020
 # 3 ETS 2153
-# 4 Euro 2285
-# 5 Hack 2493
+# 4 Euro 2285 
+# 5 Hack 2493 
 # 6 Hobo 2599
 # 7 Juv 2864
 # 8 Least 2967
@@ -37,12 +37,12 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 8
+i <- 17
 
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
-maxBrood <- allSpecies$MaxBrood[i]
+maxBrood <- allSpecies$MaxBrood[i] + 1
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
 # dat <- SpeciesData(species)
@@ -139,7 +139,7 @@ test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
 stopCluster(cl)
 })
 # 
-saveRDS(test, file = "leastskipCOV.rds")
+saveRDS(test, file = "VICECOV.rds")
 # 
 # saveRDS(test, file = "SilSpotSkippatch.rds")
 # saveRDS(test, file = "RSPpatch.rds")
@@ -171,7 +171,7 @@ saveRDS(test, file = "leastskipCOV.rds")
 # for (res in 2:14){
 # setwd("slurmCovOutput/otherResults/")
 # temp <- readRDS(results[res])
-temp <- readRDS("leastskipCOV.rds")
+temp <- readRDS("VICECOV.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -226,7 +226,7 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-slurm_out<- readRDS("LWSslurmcovs.rds")
+slurm_out<- readRDS("VICECOV.rds")
 
 
 outList <- slurm_out
