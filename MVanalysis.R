@@ -18,15 +18,15 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # threshold: either > 1000, or maybe if same year, different M give wildly varying N estimates (5x or 10x different)
 
 
-# 14 RSP 6698
-# 18 WIDW 3540
+# 14 RSP 6698 ** 9718 ** 2241 GEN
+# 18 WIDW 3540 ** 2377
 # 16 Spice 3941
-# 19 Zab 1497
+# 19 Zab 1497 ** 5423
 # 17 Vice 1621
-# 13 Peck 1727
-# 1 Black Swal 1933
-# 2 CWN 2020
-# 3 ETS 2153
+# 13 Peck 1727 ** 5312
+# 1 Black Swal 1933 ** 4162
+# 2 CWN 2020 **4282
+# 3 ETS 2153 ** 1668
 # 4 Euro 2285
 # 5 Hack 2493
 # 6 Hobo 2599
@@ -34,10 +34,10 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 8 Least 2967
 # 15 SSSkip 3152
 # 9 LGW 3308
-# 10 LWS 3441
+# 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 2
+i <- 13
 
 
 species <- allSpecies$CommonName[i]
@@ -103,17 +103,17 @@ params$param_row <- 1:nrow(params)
 params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
-dataIN1 <- c("dat", "params")
-save(list = dataIN1, file = "dataIN1.RData")
+dataIN5 <- c("dat", "params")
+save(list = dataIN5, file = "dataIN5.RData")
 
 # simple param file for slurm.apply
-paramIN1 <- data.frame(nRun = seq(1:nrow(params)))
+paramIN5 <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # calculate null hypotheses for M for different species
-testCovs <- slurm_apply(f = SlurmCovs, params = paramIN1, 
-                          cpus_per_node = 8, nodes = 4, 
-                          data_file = "dataIN1.RData", 
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5, 
+                          cpus_per_node = 8, nodes = 3, 
+                          data_file = "dataIN5.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -203,7 +203,7 @@ setwd("../../")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr2241")
+slurm_codes <- c("slr2888")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -226,9 +226,10 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-slurm_out<- readRDS("RSPslurmcovs.rds")
+saveRDS(slurm_out, "CWNslurmcovs.rds")
 
 
+# slurm_out<- readRDS("RSPslurmcovs.rds")
 outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
@@ -256,9 +257,6 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
-
-
-saveRDS(slurm_out, "RSPslurmcovs.rds")
 
 ##################################################
 # when run multiple time, variation in loglik and parameters for same M
@@ -288,11 +286,11 @@ saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed
 # SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
 # data_file Rdata
 
-dataIN <- c("SampleList")
-save(list = dataIN, file = "dataIN.RData")
+dataIN1 <- c("SampleList")
+save(list = dataIN1, file = "dataIN1.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
+paramIN1 <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
 
 # cl <- makeCluster(4)
@@ -310,9 +308,9 @@ paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so
 # saveRDS(test, file = "HobomokSkipperBSmod.rds")
 
 # calculate null hypotheses for same species, different years
-rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
+peckBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1, 
                    cpus_per_node = 8, nodes = 3, 
-                   data_file = "dataIN.RData", 
+                   data_file = "dataIN1.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
@@ -321,7 +319,7 @@ rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr2241")
+slurm_codes <- c("slr5332")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -343,6 +341,8 @@ for (j in 1:length(slurm_codes)){
 }
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
+
+saveRDS(slurm_out, "LWSbsmods.rds")
 
 outList <- slurm_out
 outDF <- list()
