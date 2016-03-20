@@ -39,7 +39,6 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 12 NPE 3629
 i <- 13
 
-
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
 maxBrood <- allSpecies$MaxBrood[i] + 1
@@ -111,9 +110,9 @@ paramIN5 <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # calculate null hypotheses for M for different species
-testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5, 
-                          cpus_per_node = 8, nodes = 3, 
-                          data_file = "dataIN5.RData", 
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
+                          cpus_per_node = 8, nodes = 4, 
+                          data_file = "dataIN.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -123,23 +122,23 @@ testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5,
 #   test <- lapply(paramIN$nRun, SlurmCovs)
 #   })
 # 
+
+# multicore
+system.time({
+cl <- makeCluster(8)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  # library(StopoverCode) #on linux
+  devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  load("dataIN.RData")
+})
+test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
+stopCluster(cl)
+})
 # 
-# # multiscore
-# system.time({
-# cl <- makeCluster(4)
-# clusterEvalQ(cl, {
-#   library(devtools)
-#   library(msm)
-#   library(dplyr)
-#   library(StopoverCode) #on linux
-#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-#   load("dataIN.RData")
-# })
-# test <- parLapply(cl, paramIN$nRun, SlurmCovs)
-# stopCluster(cl)
-# })
-# 
-# saveRDS(test, file = "SSSKIP_covtest2.rds")
+saveRDS(test, file = "leastskipCOV.rds")
 # 
 # saveRDS(test, file = "SilSpotSkippatch.rds")
 # saveRDS(test, file = "RSPpatch.rds")
@@ -166,12 +165,12 @@ testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5,
 ########################
 # extract data from SlurmCov results from parlapply (non-slurm)
 
-results <- list.files("slurmCovOutput/otherResults/")
+# results <- list.files("slurmCovOutput/otherResults/")
 
 # for (res in 2:14){
-setwd("slurmCovOutput/otherResults/")
-temp <- readRDS(results[res])
-temp <- readRDS("SSSKIP_covtest2.rds")
+# setwd("slurmCovOutput/otherResults/")
+# temp <- readRDS(results[res])
+temp <- readRDS("leastskipCOV.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -197,7 +196,7 @@ for (i in 1:length(outList)){
 
 outDF <- do.call("rbind", outDF)
 baselineDF <- outDF
-setwd("../../")
+# setwd("../../")
 
 #############################################
 
