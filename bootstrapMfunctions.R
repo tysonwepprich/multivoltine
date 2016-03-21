@@ -15,6 +15,7 @@ library(readr)
 library(reshape)
 library(reshape2)
 library(data.table)
+library(rslurm)
 
 #testing change
 
@@ -25,11 +26,11 @@ library(data.table)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-# library(StopoverCode)
+library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-devtools::load_all("StopoverCode", recompile = TRUE)
+# devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Output list of counts, survey covariates, and site covariates for each year 1998-2012
@@ -161,6 +162,12 @@ SpeciesData <- function(species){
   data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
   data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
   
+  #Add list-length survey covariate
+  data <- data %>%
+    filter(CommonName %in% unique(CommonName)[1:122]) %>%
+    group_by(SeqID) %>%
+    mutate(ListLength = length(CommonName))
+  
   #Site covariates for mu, weights
   #GDD from Daymet daily temperature min/max
   gdd <- readRDS("data/growingDD_Daymet.RDS")
@@ -191,7 +198,7 @@ SpeciesData <- function(species){
        by = list(SiteID, Year)]
   dat <- data[WeekPerYear >= 15]
   
-  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
+  surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year", "ListLength"), with = FALSE])
   dat <- dat[CommonName == species][Year >= 1998]
   
   
@@ -250,39 +257,48 @@ SpeciesData <- function(species){
     
     covs <- merge(surv, covs, by = c("SiteID", "Week", "SiteDate"), all.x = TRUE)
     
-    # some NA's, not more than 30 for covariates
-    # just assign them as mean (even though not perfect for seasonal variables)
     covs <- data.frame(covs)
-    for(j in 6:ncol(covs)){
-      covs[is.na(covs[,j]), j] <- mean(covs[,j], na.rm = TRUE)
-    }
+    covs$Zspecies <- scale(covs$ListLength)[1:nrow(covs)]
     
-    covs$Ztemp <- scale(poly(covs$mean.temp, 2)[, 1])[1:nrow(covs)]
-    covs$Ztemp2 <- scale(poly(covs$mean.temp, 2)[, 2])[1:nrow(covs)]
-    covs$Zwind <- scale(covs$mean.wind)[1:nrow(covs)]
-    covs$Zcloud <- scale(covs$mean.cloud)[1:nrow(covs)]
-    covs$Zduration <- scale(covs$duration)[1:nrow(covs)]
-    covs$Zhour <- scale(covs$start.hour)[1:nrow(covs)]
-    covs$Zspecies <- scale(covs$num.species)[1:nrow(covs)]
-    covs$Zallabund <- scale(log(covs$abund + 1))[1:nrow(covs)]
-    
-    # new idea for phi, include ordinal day for time/age standard instead of week
-    covs$Zjulian <- scale(yday(covs$SiteDate))
-    
-    #cast covs as matrix, so NA's inserted for missing surveys
-    cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 9))
+    cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 1))
     
     cov_molten <- melt(covs, id = c("SiteID", "Week", "SiteDate"))
-    cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp", ], SiteID ~ Week, value = "value"))
-    cov_array[,,2] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp2", ], SiteID ~ Week, value = "value"))
-    cov_array[,,3] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zwind", ], SiteID ~ Week, value = "value"))
-    cov_array[,,4] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zcloud", ], SiteID ~ Week, value = "value"))
-    cov_array[,,5] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zduration", ], SiteID ~ Week, value = "value"))
-    cov_array[,,6] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zhour", ], SiteID ~ Week, value = "value"))
-    cov_array[,,7] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ], SiteID ~ Week, value = "value"))
-    cov_array[,,8] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zjulian", ], SiteID ~ Week, value = "value"))
-    cov_array[,,9] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zallabund", ], SiteID ~ Week, value = "value"))
+    cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ], SiteID ~ Week, value = "value"))
     
+    
+    # some NA's, not more than 30 for covariates
+    # just assign them as mean (even though not perfect for seasonal variables)
+    # covs <- data.frame(covs)
+    # for(j in 6:ncol(covs)){
+    #   covs[is.na(covs[,j]), j] <- mean(covs[,j], na.rm = TRUE)
+    # }
+    # 
+    # covs$Ztemp <- scale(poly(covs$mean.temp, 2)[, 1])[1:nrow(covs)]
+    # covs$Ztemp2 <- scale(poly(covs$mean.temp, 2)[, 2])[1:nrow(covs)]
+    # covs$Zwind <- scale(covs$mean.wind)[1:nrow(covs)]
+    # covs$Zcloud <- scale(covs$mean.cloud)[1:nrow(covs)]
+    # covs$Zduration <- scale(covs$duration)[1:nrow(covs)]
+    # covs$Zhour <- scale(covs$start.hour)[1:nrow(covs)]
+    # covs$Zspecies <- scale(covs$num.species)[1:nrow(covs)]
+    # covs$Zallabund <- scale(log(covs$abund + 1))[1:nrow(covs)]
+    # 
+    # new idea for phi, include ordinal day for time/age standard instead of week
+    # covs$Zjulian <- scale(yday(covs$SiteDate))
+    
+    #cast covs as matrix, so NA's inserted for missing surveys
+    # cov_array <- array(NA, dim=c(length(unique(surv$SiteID)), length(unique(surv$Week)), 9))
+    # 
+    # cov_molten <- melt(covs, id = c("SiteID", "Week", "SiteDate"))
+    # cov_array[,,1] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,2] <- as.matrix(cast(cov_molten[cov_molten$variable == "Ztemp2", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,3] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zwind", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,4] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zcloud", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,5] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zduration", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,6] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zhour", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,7] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zspecies", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,8] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zjulian", ], SiteID ~ Week, value = "value"))
+    # cov_array[,,9] <- as.matrix(cast(cov_molten[cov_molten$variable == "Zallabund", ], SiteID ~ Week, value = "value"))
+    # 
     dat_list[[i]]$surv_covs <- cov_array
     
 

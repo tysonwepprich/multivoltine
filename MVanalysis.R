@@ -37,7 +37,7 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 17
+i <- 11
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -45,14 +45,14 @@ maxBrood <- allSpecies$MaxBrood[i] + 1
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
 # dat <- SpeciesData(species)
-dat <- SpeciesDataP1(species)
+dat <- SpeciesData(species)
 
 
 # for each species, select parameters
 # how much data available for modeling?
 
 count_cutoff <- 5
-surv_cutoff <- 3
+surv_cutoff <- 2
 data_avail <- data.frame()
 for (j in 1:length(dat)){
   list_index <- j
@@ -77,13 +77,13 @@ list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
-p_cov1 <- "none" #c("none", 7) # Select detection covariates here (1:7 possible)
+p_cov1 <- c("none", 7) # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
 site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
-sigma.m <- "hom" #c("het", "hom")
+sigma.m <- c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
 
 params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, p_cov3, p_cov4,
@@ -115,26 +115,26 @@ paramIN5 <- data.frame(nRun = seq(1:nrow(params)))
 
 
 # multicore
-system.time({
-cl <- makeCluster(4)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  library(StopoverCode) #on linux
-  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-  load("dataIN.RData")
-})
-test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
-stopCluster(cl)
-})
-
-saveRDS(test, file = "EUROcovs.rds")
+# system.time({
+# cl <- makeCluster(4)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   library(StopoverCode) #on linux
+#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+#   load("dataIN.RData")
+# })
+# test <- parLapplyLB(cl, paramIN$nRun, SlurmCovs)
+# stopCluster(cl)
+# })
+# 
+# saveRDS(test, file = "EUROcovs.rds")
 
 # calculate null hypotheses for M for different species
-testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5, 
                           cpus_per_node = 8, nodes = 4, 
-                          data_file = "dataIN.RData", 
+                          data_file = "dataIN5.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -163,7 +163,7 @@ testCovs <- slurm_apply(f = SlurmCovs, params = paramIN,
 # for (res in 2:14){
 # setwd("slurmCovOutput/otherResults/")
 # temp <- readRDS(results[res])
-temp <- readRDS("VICECOV.rds")
+temp <- readRDS("slurmCovOutput/nbdcovs.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -195,7 +195,7 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr2888")
+slurm_codes <- c("slr5263")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
