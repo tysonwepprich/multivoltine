@@ -23,10 +23,10 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 16 Spice 3941
 # 19 Zab 1497 ** 5423
 # 17 Vice 1621
-# 13 Peck 1727 ** 5312
+# 13 Peck 1727 ** 5312 ** 1729 GEN
 # 1 Black Swal 1933 ** 4162
 # 2 CWN 2020 **4282
-# 3 ETS 2153 ** 1668
+# 3 ETS 2153 ** 1668  ** 4397 GEN
 # 4 Euro 2285
 # 5 Hack 2493
 # 6 Hobo 2599
