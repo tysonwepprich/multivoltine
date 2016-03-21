@@ -4,7 +4,7 @@ list.of.packages <- c("devtools", "msm", "parallel", "plyr", "dplyr", "tidyr",
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages) > 0) install.packages(new.packages)
 
-library(rslurm)
+# library(rslurm)
 library(devtools)
 library(msm)
 library(parallel)
@@ -447,7 +447,7 @@ SimNullData <- function(simFits, nsim, spec_data){
   for (bs in 1:length(SampleList)){
     mod <- (bs + nsim - 1) %/% nsim        #ADD IN INDEX FOR MOD AND BOOTSTRAP TO TRACK THESE
     if (length(simFits) > 1){
-      nullFit <- simFits[[mod]] #[[1]]    # list index 1 added for non-slurm output, not sure why different
+      nullFit <- simFits[[mod]][[1]]    # list index 1 added for non-slurm output, not sure why different
     }else{
       nullFit <- simFits
     }
