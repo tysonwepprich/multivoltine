@@ -353,7 +353,12 @@ SlurmCovs <- function(nRun){
   #   p.m <<- pars$p.m
   #   w.m <<- pars$w.m
   #   mu.m <<- pars$mu.m
-  sigma.m <<- pars$sigma.m
+  if (M == 1){ # this needed because code gave errors otherwise
+    sigma.m <<- "hom"
+    pars$sigma.m <- "hom"
+  } else {
+    sigma.m <<- pars$sigma.m
+  }
   phi.m <<- pars$phi.m
   
   ### data prep ###
@@ -406,7 +411,11 @@ SlurmCovs <- function(nRun){
     w.m <<- "common"
   }else{
     mu.m <<- "cov"
-    w.m <<- "cov"
+    if(M == 1){
+      w.m <<- "common"
+    } else {
+      w.m <<- "cov"
+    }
     if (site_covs == "AnnGDD") s_cov <- cov_sites$YearGDD
     if (site_covs == "SprGDD") s_cov <- cov_sites$SpringGDD
     if (site_covs == "lat") s_cov <- cov_sites$lat

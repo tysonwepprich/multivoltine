@@ -37,7 +37,7 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 11
+i <- 4
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -77,11 +77,11 @@ list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
 
 # choose parameter ranges
 raw_cutoff <- 5 # c(5, 10)
-p_cov1 <- c("none", 7) # Select detection covariates here (1:7 possible)
+p_cov1 <- c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
-site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+site_covs <- c("AnnGDD", "common") # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
 sigma.m <- c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
@@ -96,17 +96,17 @@ names(params) <- c("species", "list_index", "raw_cutoff", "p_cov1", "p_cov2", "p
 # params2$p_cov2 <- 1
 # params2$p_cov3 <- 2
 # params <- rbind(params, params2)
-params <- rbind(params, params, params, params)
+params <- rbind(params, params)
 
 params$param_row <- 1:nrow(params)
 params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
-dataIN5 <- c("dat", "params")
-save(list = dataIN5, file = "dataIN5.RData")
+dataIN <- c("dat", "params")
+save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
-paramIN5 <- data.frame(nRun = seq(1:nrow(params)))
+paramIN <- data.frame(nRun = seq(1:nrow(params)))
 
 # # single core
 # system.time({
@@ -132,9 +132,9 @@ paramIN5 <- data.frame(nRun = seq(1:nrow(params)))
 # saveRDS(test, file = "EUROcovs.rds")
 
 # calculate null hypotheses for M for different species
-testCovs <- slurm_apply(f = SlurmCovs, params = paramIN5, 
+testCovs <- slurm_apply(f = SlurmCovs, params = paramIN, 
                           cpus_per_node = 8, nodes = 4, 
-                          data_file = "dataIN5.RData", 
+                          data_file = "dataIN.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -195,7 +195,7 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr5263")
+slurm_codes <- c("slr8024")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
