@@ -652,10 +652,18 @@ SlurmGenerationP1 <- function(nRun){
     # p_cov2 <- pars$p_cov2
     site_covs <- pars$site_covs
     M <<- pars$M
-    sigma.m <<- pars$sigma.m
+    if (M == 1){ # this needed because code gave errors otherwise
+      sigma.m <<- "hom"
+    } else {
+      sigma.m <<- pars$sigma.m
+    }
     phi.m <<- pars$phi.m
     p.m <<- "common"
-    w.m <<- "cov"
+    if (M == 1){ # this needed because code gave errors otherwise
+      w.m <<- "com"
+    } else {
+      w.m <<- "cov"
+    }
     mu.m <<- "cov"
     ### data prep ###
     counts <<- BSdata$simData$counts
@@ -718,6 +726,18 @@ SlurmGenerationP1 <- function(nRun){
     
     # Fit alternative model
     M <<- M + 1
+    
+    if (M == 1){ # this needed because code gave errors otherwise
+      sigma.m <<- "hom"
+    } else {
+      sigma.m <<- pars$sigma.m
+    }
+    if (M == 1){ # this needed because code gave errors otherwise
+      w.m <<- "com"
+    } else {
+      w.m <<- "cov"
+    }
+    
     Tries <- 5
     temp.fit <- list()
     temp.ll <- rep(NA, Tries)
