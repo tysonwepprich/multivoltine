@@ -195,7 +195,7 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr8541")
+slurm_codes <- c("slr6969")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -218,7 +218,7 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-saveRDS(slurm_out, "slurmCovOutput/NPEcov.rds")
+saveRDS(slurm_out, "slurmCovOutput/SSScov.rds")
 
 # slurm_out<- readRDS("RSPslurmcovs.rds")
 outList <- slurm_out
@@ -253,56 +253,142 @@ baselineDF <- outDF
 # when run multiple time, variation in loglik and parameters for same M
 # choose best model, then simulate data and compare to M+1 for LRT to choose M
 
-# bestmods will be used for LRT statistic to compare to null distribution from simulations
-bestmods <- baselineDF %>% group_by(list_index, M) %>%
-  filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
-  filter(maxNest < 1000 * median(baselineDF$maxNest, na.rm = TRUE)) %>%    ##trying to deal with huge N estimates
-  arrange(list_index)
+rdsfiles <- list.files("slurmCovOutput/")
 
-# nullmods are model fits from which data is simulated 
-nullmods <- bestmods %>% group_by(list_index) %>% filter(M < max(M))
+for (j in 5:length(rdsfiles)){
+  
+  sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
+  
+  slurm_out<- readRDS(paste("slurmCovOutput/", rdsfiles[j], sep = ""))
+  
+  # deal with slurm_out list hierarchy difference
+  outList <- list()
+  for (k in 1:length(slurm_out)){
+    if(length(slurm_out[[k]]) == 1){
+      outList[[k]] <- slurm_out[[k]][[1]]
+    }else{
+      outList[[k]] <- slurm_out[[k]]
+    }
+  }
+  
+  outDF <- list()
+  for (i in 1:length(outList)){
+    if (length(outList[[i]]) == 1){
+      out <- outList[[i]][[1]]$pars
+      out$model <- i
+      out$ll.val <- outList[[i]][[1]]$ll.val
+      if (is.na(out$ll.val)){
+        out$npar <- NA
+        out$maxNest <- NA
+        out$medP <- NA
+        
+      }else{
+        out$npar <- outList[[i]][[1]]$npar
+        out$maxNest <- round(max(outList[[i]][[1]]$N.est))
+        out$medP <- round(median(outList[[i]][[1]]$p.est), 3)
+      }
+      out$time <- as.double(outList[[i]][[1]]$time, units = "mins")
+      out$nRun <- outList[[i]][[1]]$nRun
+    }else{
+      out <- outList[[i]]$pars
+      out$model <- i
+      out$ll.val <- outList[[i]]$ll.val
+      if (is.na(out$ll.val)){
+        out$npar <- NA
+        out$maxNest <- NA
+        out$medP <- NA
+        
+      }else{
+        out$npar <- outList[[i]]$npar
+        out$maxNest <- round(max(outList[[i]]$N.est))
+        out$medP <- round(median(outList[[i]]$p.est), 3)
+      }
+      out$time <- as.double(outList[[i]]$time, units = "mins")
+      out$nRun <- outList[[i]]$nRun
+    }
+    outDF[[i]] <- out
+  }
+  
+  outDF <- do.call("rbind", outDF)
+  baselineDF <- outDF
+  
+  
+  # bestmods will be used for LRT statistic to compare to null distribution from simulations
+  bestmods <- baselineDF %>% group_by(list_index, M) %>%
+    filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+    filter(maxNest < 1000 * median(baselineDF$maxNest, na.rm = TRUE)) %>%    ##trying to deal with huge N estimates
+    arrange(list_index)
+  
+  # nullmods are model fits from which data is simulated 
+  nullmods <- bestmods %>% group_by(list_index) %>% filter(M < max(M))
+  
+  simFits <- outList[c(nullmods$model)]
+  
+  species <- outList[[1]]$pars$species
+  # if (is.null(species)) species <- slurm_out[[1]][[1]]$pars$species
+  dat <- SpeciesDataP1(species)
 
-# simFits <- slurm_out[c(nullmods$model)]
-simFits <- temp[c(nullmods$model)]
+  SampleList <- SimNullData(simFits, nsim = 100, spec_data = dat)
+  
+  saveRDS(SampleList, file = paste("simDataGenMode/", sp, "simdata.rds", sep = ""))
+}
+# 
+# # bestmods will be used for LRT statistic to compare to null distribution from simulations
+# bestmods <- baselineDF %>% group_by(list_index, M) %>%
+#   filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+#   filter(maxNest < 1000 * median(baselineDF$maxNest, na.rm = TRUE)) %>%    ##trying to deal with huge N estimates
+#   arrange(list_index)
+# 
+# # nullmods are model fits from which data is simulated 
+# nullmods <- bestmods %>% group_by(list_index) %>% filter(M < max(M))
+# 
+# # simFits <- slurm_out[c(nullmods$model)]
+# simFits <- temp[c(nullmods$model)]
 
 ###############################################
 # get simulated data from null hypotheses for M (# of generations in a year)
 
 # use only 50 nsims to start
-SampleList <- SimNullData(simFits, nsim = 50, spec_data = dat)
+# SampleList <- SimNullData(simFits, nsim = 50, spec_data = dat)
+# 
+# 
+# saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed = TRUE), "simdata.rds", sep = ""))
+# 
+
+source('bootstrapMfunctions.R')
 
 
-saveRDS(SampleList, file = paste("simDataGenMode/", gsub(" ", "", species, fixed = TRUE), "simdata.rds", sep = ""))
+rdsfiles <- list.files("simDataGenMode/")
+j <- 12
 
+sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
-# SampleList <- readRDS("simDataGenMode/HobomokSkippersimdata.rds")
+SampleList <- readRDS(paste("simDataGenMode/", sp, sep = ""))
 # data_file Rdata
-
-dataIN1 <- c("SampleList")
-save(list = dataIN1, file = "dataIN1.RData")
+dataIN <- c("SampleList")
+save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
-paramIN1 <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
+paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
-
-cl <- makeCluster(4)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  library(StopoverCode) #on linux
-  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-  load("dataIN.RData")
-})
-time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
-stopCluster(cl)
-
-saveRDS(test, file = "eurpBSmod.rds")
+# cl <- makeCluster(4)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   library(StopoverCode) #on linux
+#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+#   load("dataIN.RData")
+# })
+# time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
+# stopCluster(cl)
+# 
+# saveRDS(test, file = "eurpBSmod.rds")
 
 # calculate null hypotheses for same species, different years
-peckBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1, 
+npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
                    cpus_per_node = 8, nodes = 3, 
-                   data_file = "dataIN1.RData", 
+                   data_file = "dataIN.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
