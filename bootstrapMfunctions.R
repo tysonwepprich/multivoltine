@@ -160,7 +160,7 @@ SpeciesData <- function(species){
   setnames(data,"SiteID.x","SiteID")
   data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
   data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
-  
+
   #Site covariates for mu, weights
   #GDD from Daymet daily temperature min/max
   gdd <- readRDS("data/growingDD_Daymet.RDS")
@@ -192,7 +192,7 @@ SpeciesData <- function(species){
   dat <- data[WeekPerYear >= 15]
   
   surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year"), with = FALSE])
-  dat <- dat[CommonName == species][Year >= 1998]
+  dat <- dat[CommonName == species][Year >= 1998][Year < 2013]
   
   
   years <- sort(unique(dat$Year))
