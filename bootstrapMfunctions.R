@@ -15,7 +15,7 @@ library(readr)
 library(reshape)
 library(reshape2)
 library(data.table)
-library(rslurm)
+# library(rslurm)
 
 #testing change
 
