@@ -37,7 +37,7 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 15
+i <- 1
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -163,7 +163,7 @@ testCovs3 <- slurm_apply(f = SlurmCovs, params = paramIN3,
 # for (res in 2:14){
 # setwd("slurmCovOutput/otherResults/")
 # temp <- readRDS(results[res])
-temp <- readRDS("slurmCovOutput/BLSWALLslurmcovs.rds")
+temp <- readRDS("slurmCovOutput/BSWcov.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -220,7 +220,7 @@ test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 
 saveRDS(slurm_out, "slurmCovOutput/SSScov.rds")
 
-# slurm_out<- readRDS("RSPslurmcovs.rds")
+slurm_out<- readRDS("slurmCovOutput/BSWcov.rds")
 outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
@@ -361,6 +361,7 @@ source('bootstrapMfunctions.R')
 rdsfiles <- list.files("simDataGenMode/")
 j <- 14
 
+
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
 SampleList <- readRDS(paste("simDataGenMode/", sp, sep = ""))
@@ -371,7 +372,6 @@ save(list = dataIN1, file = "dataIN1.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
-paramIN1 <- data.frame(nRun = paramIN[1:500,])
 # cl <- makeCluster(4)
 # clusterEvalQ(cl, {
 #   library(devtools)
@@ -386,6 +386,7 @@ paramIN1 <- data.frame(nRun = paramIN[1:500,])
 # 
 # saveRDS(test, file = "eurpBSmod.rds")
 
+
 # calculate null hypotheses for same species, different years
 rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1, 
                    cpus_per_node = 8, nodes = 4, 
@@ -395,6 +396,8 @@ rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1,
 
 
 
+# extract times
+a <- lapply(test, function(x) as.numeric(unlist(x[[1]]$time)))
 
 
 # extract data from SlurmGeneration results

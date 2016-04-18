@@ -26,11 +26,11 @@ library(rslurm)
 # for linux/sesync cluster
 # remove.packages('StopoverCode') # do this to rebuild after edits
 # install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
+# library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-# devtools::load_all("StopoverCode", recompile = TRUE)
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 # Output list of counts, survey covariates, and site covariates for each year 1998-2012
@@ -161,6 +161,7 @@ SpeciesData <- function(species){
   setnames(data,"SiteID.x","SiteID")
   data[, SiteID := formatC(SiteID, width = 3, format = "d", flag = "0")]
   data[, SiteDate := parse_date(SiteDate, format = "%Y-%m-%d")]
+
   
   #Add list-length survey covariate
   data <- data %>%
@@ -198,9 +199,9 @@ SpeciesData <- function(species){
        by = list(SiteID, Year)]
   dat <- data[WeekPerYear >= 15]
   
+
   surveys <- distinct(dat[, c("SiteID", "SiteDate", "Week", "SeqID", "Year", "ListLength"), with = FALSE])
   dat <- dat[CommonName == species][Year >= 1998]
-  
   
   years <- sort(unique(dat$Year))
   dat_list <- as.list(years)

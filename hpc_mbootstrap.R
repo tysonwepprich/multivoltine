@@ -4,11 +4,14 @@ source('bootstrapMfunctions.R')
 
 
 rdsfiles <- list.files("simDataGenMode/")
-j <- 1
+j <- 19
 
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
 SampleList <- readRDS(paste("simDataGenMode/", sp, sep = ""))
+# debug with smaller dataset
+SampleList <- SampleList[1:8]
+
 # data_file Rdata
 dataIN <- c("SampleList")
 save(list = dataIN, file = "dataIN.RData")
