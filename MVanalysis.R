@@ -37,7 +37,7 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 15
+i <- 1
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
@@ -163,7 +163,7 @@ testCovs3 <- slurm_apply(f = SlurmCovs, params = paramIN3,
 # for (res in 2:14){
 # setwd("slurmCovOutput/otherResults/")
 # temp <- readRDS(results[res])
-temp <- readRDS("slurmCovOutput/BLSWALLslurmcovs.rds")
+temp <- readRDS("slurmCovOutput/BSWcov.rds")
 test <- do.call(rbind, lapply(temp, function(x) length(x[[1]]))) # extra layer of list
 
 
@@ -220,7 +220,7 @@ test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 
 saveRDS(slurm_out, "slurmCovOutput/SSScov.rds")
 
-# slurm_out<- readRDS("RSPslurmcovs.rds")
+slurm_out<- readRDS("slurmCovOutput/BSWcov.rds")
 outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
@@ -359,7 +359,7 @@ source('bootstrapMfunctions.R')
 
 
 rdsfiles <- list.files("simDataGenMode/")
-j <- 12
+j <- 6
 
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
@@ -371,19 +371,30 @@ save(list = dataIN, file = "dataIN.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
-# cl <- makeCluster(4)
-# clusterEvalQ(cl, {
-#   library(devtools)
-#   library(msm)
-#   library(dplyr)
-#   library(StopoverCode) #on linux
-#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-#   load("dataIN.RData")
-# })
-# time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
-# stopCluster(cl)
-# 
-# saveRDS(test, file = "eurpBSmod.rds")
+cl <- makeCluster(8)
+clusterEvalQ(cl, {
+  library(devtools)
+  library(msm)
+  library(dplyr)
+  library(StopoverCode) #on linux
+  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+  load("dataIN.RData")
+})
+time1 <- system.time({test1 <- parLapply(cl, paramIN$nRun[1:200], SlurmGenerationP1)})
+saveRDS(test1, file = "HOBmboot1.rds")
+time2 <- system.time({test2 <- parLapply(cl, paramIN$nRun[201:400], SlurmGenerationP1)})
+saveRDS(test2, file = "HOBmboot1.rds")
+time3 <- system.time({test3 <- parLapply(cl, paramIN$nRun[401:600], SlurmGenerationP1)})
+saveRDS(test3, file = "HOBmboot3.rds")
+time4 <- system.time({test4 <- parLapply(cl, paramIN$nRun[601:800], SlurmGenerationP1)})
+saveRDS(test4, file = "HOBmboot4.rds")
+time5 <- system.time({test5 <- parLapply(cl, paramIN$nRun[801:1000], SlurmGenerationP1)})
+saveRDS(test5, file = "HOBmboot5.rds")
+
+stopCluster(cl)
+# error, overwrote mboot1, with misnammed mboot2
+
+
 
 # calculate null hypotheses for same species, different years
 npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
@@ -394,6 +405,8 @@ npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 
+# extract times
+a <- lapply(test, function(x) as.numeric(unlist(x[[1]]$time)))
 
 
 # extract data from SlurmGeneration results
