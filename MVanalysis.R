@@ -359,18 +359,19 @@ source('bootstrapMfunctions.R')
 
 
 rdsfiles <- list.files("simDataGenMode/")
-j <- 12
+j <- 14
 
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
 SampleList <- readRDS(paste("simDataGenMode/", sp, sep = ""))
 # data_file Rdata
-dataIN <- c("SampleList")
-save(list = dataIN, file = "dataIN.RData")
+dataIN1 <- c("SampleList")
+save(list = dataIN1, file = "dataIN1.RData")
 
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
+paramIN1 <- data.frame(nRun = paramIN[1:500,])
 # cl <- makeCluster(4)
 # clusterEvalQ(cl, {
 #   library(devtools)
@@ -386,9 +387,9 @@ paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so
 # saveRDS(test, file = "eurpBSmod.rds")
 
 # calculate null hypotheses for same species, different years
-npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
-                   cpus_per_node = 8, nodes = 3, 
-                   data_file = "dataIN.RData", 
+rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1, 
+                   cpus_per_node = 8, nodes = 4, 
+                   data_file = "dataIN1.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
@@ -397,7 +398,7 @@ npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN,
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr1729")
+slurm_codes <- c("slr3603")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
