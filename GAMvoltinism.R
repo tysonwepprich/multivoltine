@@ -10,8 +10,8 @@ library(ggplot2)
 library(zoo)
 
 
-setwd("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012")
-data <- read.csv("data.trim.csv", header = TRUE)
+# setwd("")
+data <- read.csv("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/data.trim.csv", header = TRUE)
 data <- data.table(data)
 data <- data[, list(SeqID, SiteID.x, SiteDate, Week, Total, CheckListKey, CommonName)]
 setnames(data,"SiteID.x","SiteID")
@@ -19,14 +19,14 @@ data[, SiteID := as.character(SiteID)]
 data[, SiteDate := ymd(as.character(SiteDate))]
 
 
-region <- data.table(read.csv("site_region.txt", header = TRUE))
+region <- data.table(read.csv("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/site_region.txt", header = TRUE))
 region[, SiteID := gsub(" ", "", as.character(SiteID))]
 data <- merge(data, region, by = "SiteID")
 setkey(data, SeqID)
 
 surveys <- distinct(data[, c("SeqID", "SiteID", "SiteDate", "Region", "Week"), with = FALSE])
 
-site_geo <- read.csv("../GIS/OHsites_reconciled.csv", header = TRUE)
+site_geo <- read.csv("C:/Users/Tyson/Desktop/Box Sync/Ohio/GIS/OHsites_reconciled.csv", header = TRUE)
 site_geo <- data.table(site_geo)
 setnames(site_geo,"Name","SiteID")
 site_geo[, SiteID := as.character(SiteID)]
@@ -119,9 +119,9 @@ ScaledPhenologyGeo <- function(counts, yr){
 
 
 
-SpeciesList <- readRDS("SpeciesList.rds")
+SpeciesList <- readRDS("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/SpeciesList.rds")
 
-region <- data.table(read.csv("site_region.txt", header = TRUE))
+region <- data.table(read.csv("C:/Users/Tyson/Desktop/Box Sync/Ohio/data2012/site_region.txt", header = TRUE))
 region[, SiteID := gsub(" ", "", as.character(SiteID))]
 
 
@@ -189,7 +189,7 @@ for (sp in species){
 # plots with GAM based on lat/lon rather than region x year
 
 for (sp in species){
-  counts <- readRDS(paste("RDSfiles/rawcounts", sp, ".rds", sep = ""))
+  counts <- readRDS(paste("../Chap1-Bfly-Landuse-Climate/RDSfiles/rawcounts", sp, ".rds", sep = ""))
   counts <- merge(counts, site_geo, by = "SiteID")
   print(sp)
   
