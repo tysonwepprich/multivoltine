@@ -24,14 +24,126 @@ library(data.table)
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
 
 # for linux/sesync cluster
-# remove.packages('StopoverCode') # do this to rebuild after edits
-# install.packages("StopoverCode", repos = NULL, type="source")
+remove.packages('StopoverCode') # do this to rebuild after edits
+install.packages("StopoverCode", repos = NULL, type="source")
 library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
 # devtools::load_all("StopoverCode", recompile = TRUE)
 
+
+
+# function to fit stopover model to GAM predictions
+# Year is character, obsM best guess from GAM plots
+StopoverGAM <- function(nRun){
+  
+  pars <- params[nRun, ]
+  sp <- pars$species
+  nsim <- pars$nSim
+  obsM <- pars$obsM
+  yr <- pars$yr
+  outlist <- list()
+  # for (i in 1:nsim){
+  counts <- pred %>%
+    filter(Year == yr) %>%
+    data.frame()
+  
+  # if modeled by gdd
+  counts <- counts[which(counts$cumdegday %% 50 == 0), ]
+  counts$Week <- counts$cumdegday / 50 + 1
+  
+  counts_uniq <- counts %>% 
+    group_by(SiteID, Week) %>%
+    arrange(Week) %>%
+    summarise(Total = rpois(1, GAM.pred[1])) # here's the random part in each sim
+  
+  count_matrix <- as.matrix(reshape::cast(counts_uniq, SiteID ~ Week, value = "Total"))
+  
+  site_covs <- counts %>%
+    select(SiteID, lat) %>%
+    distinct()
+  
+  counts <- count_matrix
+  
+  # dummy p covariate to make model work, but really just want common Np index
+  cov.p <- array(rnorm(dim(counts)[1]*dim(counts)[2]), dim = c(dim(counts), 1))
+  cov.p[,,1][is.na(counts)] <- NA
+  # select sites with enough individuals counted
+  siteRows <- which(rowSums(counts, na.rm = TRUE) >= 5)
+  counts <- counts[siteRows, ]
+  counts[is.na(counts)] <- -1
+  
+  M <<- obsM
+  S <<- dim(counts)[1]
+  K <<- dim(counts)[2]
+  TIME <<- dim(counts)[2]
+  
+  cov.p <- cov.p[siteRows, , , drop = FALSE]
+  # qp is the number of covariates for p
+  qp <- dim(cov.p)[3]
+  for(q in 1:qp) cov.p[,,q] <- scale(cov.p[,,q])[1:S,1:K]
+  cov.p[is.na(cov.p)] <- -1
+  
+  
+  # Time covariate for phi
+  cov.phi <-  matrix(((1:(K-1))-mean(1:(K-1)))/sqrt(var(1:(K-1))),S,K-1,byrow=TRUE) 
+  
+  # Covariate (latitude)
+  # lat <- rowMeans(cov_array[,,5], na.rm = TRUE)
+  lat <- site_covs[, "lat"]
+  lat <- lat[siteRows]
+  cov.w <- cov.mu <- scale(lat)[,1]
+  
+  # don't know why double assignment makes things work in parallel
+  counts <<- counts
+  cov.w <<- cov.w
+  cov.mu <<- cov.mu
+  cov.p <<- cov.p
+  cov.phi <<- cov.phi
+  qp <<- dim(cov.p)[3]
+  
+  
+  # p.m <- "cov"
+  p.m <<- "common"
+  w.m <<- "cov"
+  mu.m <<- "cov"
+  sigma.m <<- "het"
+  # phi.m <- "logit.a"
+  phi.m <<- "const"
+  if (M == 1){ # this needed because code gave errors otherwise
+    sigma.m <<- "hom"
+    w.m <<- "common"
+  } 
+  
+  
+  
+  Tries <- 3
+  temp.fit <- list()
+  temp.ll <- rep(NA, Tries)
+  
+  for (k in 1:Tries){
+    start.list <<- startVals(p.m,w.m,mu.m,sigma.m,phi.m)
+    pars.start <<- c(start.list$N,start.list$cvec, start.list$d0, start.list$d1, start.list$b0, start.list$b1,start.list$sigma,  start.list$a0, start.list$a1, start.list$a2) #this line remains the same for all models
+    temp.fit[[k]] <- mLLMixtCounts.fit(p.m,w.m,mu.m,sigma.m,phi.m)
+    temp.ll[k] <- temp.fit[[k]]$ll.val
+  }
+  
+  if (length(which(is.na(temp.ll) == TRUE)) < Tries){
+    tempchoose <- min(c(1:Tries)[which(temp.ll==max(temp.ll, na.rm=TRUE))])
+    temp <-temp.fit[[tempchoose]]
+  }else{
+    temp <- list()
+    temp$ll.val <- NA
+  }
+  
+  temp <-temp.fit[[tempchoose]] 
+  outlist$pars <- pars
+  outlist$stopoverfit <- temp
+  
+  # }
+  return(outlist)
+}
 
 # Output list of counts, survey covariates, and site covariates for each year 1998-2012
 SpeciesDataP1 <- function(species){
