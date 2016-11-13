@@ -893,8 +893,8 @@ SlurmGeneration <- function(nRun){
 BSpval <- function(nullM, spec, BSmods, baselineDF){
   nullM <- nullM
   spec <- spec
-  origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
-  origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% select(ll.val)
+  origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% dplyr::select(ll.val)
+  origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% dplyr::select(ll.val)
   # problem when null mod generally doesn't fit, many alternative mods do
   
   BStests <- BSmods %>% filter(species == spec) %>% 
