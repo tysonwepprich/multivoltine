@@ -3,10 +3,13 @@
 # models <- phiout[13]
 # models <- slurm_out[6][[1]]
 # models <- base_out[[23]]
-models <- slurm_out[[38]]
 
-dat <- SpeciesData(allSpecies$CommonName[14])
-counts <- dat[[13]]$counts
+models <- slurm_out[[166]]
+# models <- slurm_out[[166]]
+models <- test
+
+dat <- SpeciesDataP1(allSpecies$CommonName[1])
+counts <- dat[[15]]$counts
 matplot(t(counts), type = "l")
 # counts <- count_array[,,32] #select species here, number corresponds to row in species_list
 
@@ -23,7 +26,7 @@ cov.w <- cov.mu <- scale(lat)
 
 
 # temp <- models[[1]]
-temp <- models
+temp <- models[[1]]
 
 #---  for selected model ---#
 FittedVal <- FittedVal.f(temp)
