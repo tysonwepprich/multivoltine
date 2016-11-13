@@ -1,3 +1,18 @@
+
+#final!
+#1-80 species at 4 cpus per node
+#461219, slr 7580
+#81-100 species at 2 cpus per node
+#461225, slr 7735
+#ALL WRAPPER ERRORS!?!
+
+#then check for wrapper code error, possibly memory related if too parallel
+#from slr7580, reran these as
+#461231, slr7035
+#worked with no wrapper code errors
+
+#trying again after errors with starttime. Trying first 100 species
+
 source('bootstrapMfunctions.R')
 
 library(mgcv)
@@ -122,19 +137,29 @@ species <- SpeciesList %>% arrange(Present) %>% select(CommonName)
 
 # models <-  c("mod1", "mod1simp", "mod2", "mod2simp", "mod1cov", "mod1covsimp", "mod2cov", "mod2covsimp", "overparam")
 models <- c("orig", "extra")
-params <- expand.grid(species$CommonName, models,
+cutoff <- c("strict", "loose")
+params <- expand.grid(species$CommonName[1:80], models, cutoff,
                       stringsAsFactors = FALSE)
-names(params) <- c("species", "model")
+names(params) <- c("species", "model", "cutoff")
 
-params <- params[c(70:73, 192:195),]
-# params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
+#testing
+# params <- params %>% filter(species == "Carolina Satyr")
+#redoing wrapper errors
+ok <- redo %>% select(species, model, cutoff)
+params <- anti_join(params, ok)
+# params <- params[c(25:30),]
 
-# data_file Rdata
-dataIN <- c("gdd", "data", "surveys", "covdata", "site_geo", "params")
-save(list = dataIN, file = "dataIN.RData")
+
+params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
+
+# # data_file Rdata
+# dataIN <- c("gdd", "data", "surveys", "covdata", "site_geo", "params")
+# save(list = dataIN, file = "dataIN.RData")
 
 # simple param file for slurm.apply
-paramIN <- data.frame(nRow = seq(1:nrow(params)))
+# paramIN <- data.frame(nRow = seq(1:nrow(params)))
+
+# test <- apply(X = params, MARGIN = 1, FitGAM)
 
 # calculate null hypotheses for M for different species
 # gams <- slurm_apply(f = FitGAM, params = paramIN, 
@@ -148,17 +173,22 @@ ty <- slurm_apply(f = FitGAM, params = params, nodes = 1,
                   slurm_options = list(partition = "sesynctest"))
 
 test <- mapply(FUN = FitGAM, species = params$species, model = params$model)
+
+
+
 # gamlist <- as.list(species$CommonName)
 # for (i in 1:nrow(species)){
 # FitGAM <- function(nRow){
-FitGAM <- function(species, model){
+FitGAM <- function(species, model, cutoff){
   sp <- species
   model <- model
-  pars <- data.frame(species, model)
+  cutoff <- cutoff
+  reduced <- NA
+  pars <- data.frame(species, model, cutoff, reduced)
   # pars <- params[nRow,]
   # sp <- pars$species
   # model <- pars$model
-  counts <- data[CommonName == sp]
+  counts <- data %>% filter(CommonName == sp)
   counts[, Ordinal := yday(SiteDate)]
   counts[, Year := year(SiteDate)]
   
@@ -188,8 +218,17 @@ FitGAM <- function(species, model){
                            YearTotal = sum(Total)), 
                    by = list(SiteID, Year)]
   
-  datGAM <- counts[YearTotal >= 1]
-  datGAM <- datGAM[SurvPerYear >= 10]
+
+  if(cutoff == "strict"){
+    datGAM <- counts[YearTotal >= 3]
+    datGAM <- datGAM[SurvPerYear >= 15]
+  }
+  if(cutoff == "loose"){
+    datGAM <- counts[YearTotal >= 1]
+    datGAM <- datGAM[SurvPerYear >= 10]
+  }
+  starttime <- Sys.time()
+  
   if(nrow(datGAM) == 0){
     mod <- NA
   }else{
@@ -232,105 +271,15 @@ FitGAM <- function(species, model){
     dat$temperature[which(is.na(dat$temperature))] <- 0
     dat$duration[which(is.na(dat$duration))] <- 0
     dat$Reg9Year <- as.factor(paste(dat$region9, dat$Year, sep = "_"))
-    
+
     temp <- dat
-    
-    if(sum(temp$Total) < 20|length(unique(temp$SiteID)) < 2|length(unique(temp$Year)) < 2) {
+
+    if(sum(temp$Total) < 20|length(unique(temp$SiteID)) < 2|length(unique(temp$Year)) < 2|
+       length(unique(temp$SiteYear))<5|length(unique(temp$Reg9Year))<2) {
       mod <- NA
     }else{
       
-      
-      if(model == "mod1"){
-        mod <- try(gam(Total ~ 
-                         s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) +
-                         te(lat, lon, Ordinal, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp,
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "mod1simp"){
-        mod <- try(gam(Total ~ 
-                         s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) + 
-                         s(Ordinal, bs = "tp", k = 15),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp, 
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      
-      if(model == "mod2"){
-        mod <- try(gam(Total ~ 
-                         s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
-                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp,
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if (model == "mod2simp"){
-        mod <- try(gam(Total ~ 
-                         s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) + 
-                         s(cumdegday, bs = "tp", k = 15),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp, 
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "mod1cov"){
-        mod <- try(gam(Total ~ s(listlength, k = 3) + s(temperature, k = 3) + s(duration, k = 3) +
-                         s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) +
-                         te(lat, lon, Ordinal, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp,
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "mod1covsimp"){
-        mod <- try(gam(Total ~ s(listlength, k = 3) + s(temperature, k = 3) + s(duration, k = 3) +
-                         s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) + 
-                         s(Ordinal, bs = "tp", k = 15),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp, 
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "mod2cov"){
-        mod <- try(gam(Total ~ s(listlength, k = 3) + s(temperature, k = 3) + s(duration, k = 3) +
-                         s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
-                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp,
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "mod2covsimp"){
-        mod <- try(gam(Total ~ s(listlength, k = 3) + s(temperature, k = 3) + s(duration, k = 3) +
-                         s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) + 
-                         s(cumdegday, bs = "tp", k = 15),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp, 
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
-      if(model == "overparam"){
-        mod <- try(gam(Total ~ 
-                         s(SiteYear, cumdegday, bs = "fs", k = 10, m = 1) +
-                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(7, 20), d = c(2, 1)),
-                       family = nb(theta = NULL, link = "log"),
-                       # family = poisson(link = "log"),
-                       data = temp,
-                       method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
-      }
-      
+
       if(model == "orig"){
         mod <- try(gam(Total ~ 
                          s(SiteID, bs = "re", k = 5) +
@@ -345,22 +294,57 @@ FitGAM <- function(species, model){
                        optimizer = c("outer", "newton"), 
                        gamma = 1.4, 
                        control = list(maxit = 500)))
+
+        
+        if(class(mod)=="try-error"){
+          mod <- try(gam(Total ~ 
+                           s(SiteID, bs = "re", k = 5) +
+                           s(Reg9Year, bs = "re", k = 5) + 
+                           # ti(Reg9Year, cumdegday, bs = c("re", "cr"), k = c(5, 10)) +
+                           s(cumdegday, bs = "cr", k = 20)+
+                           s(Ordinal, bs = "cr", k = 10),
+                         family = nb(theta = NULL, link = "log"),
+                         # family = poisson(link = "log"),
+                         data = temp,
+                         method = "REML", 
+                         optimizer = c("outer", "newton"), 
+                         gamma = 1.4, 
+                         control = list(maxit = 500)))
+          pars$reduced <- "yes"
+        }
       }
       
+      
+      
       if(model == "extra"){
-        mod <- try(gam(Total ~ s(SiteID, bs = "re") + s(Year, bs = "re") +
+        mod <- try(gam(Total ~ 
                          s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
-                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)) +
+                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 20), d = c(2, 1)) +
                          s(Ordinal, bs = "cr", k = 10),
                        family = nb(theta = NULL, link = "log"),
                        # family = poisson(link = "log"),
                        data = temp,
                        method = "REML", 
                        optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
-      }
+
+        if(class(mod)=="try-error"){
+          mod <- try(gam(Total ~ 
+                           s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
+                           s(cumdegday, bs = "tp", k = 20) +
+                           s(Ordinal, bs = "cr", k = 10),
+                         family = nb(theta = NULL, link = "log"),
+                         # family = poisson(link = "log"),
+                         data = temp,
+                         method = "REML", 
+                         optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+          pars$reduced <- "yes"
+          
+          }
+        }
     } 
   }
   
+  pars$modtime <- as.numeric(Sys.time() - starttime)
   outlist <- list()
   outlist[[1]] <- pars
   outlist[[2]] <- mod
@@ -394,3 +378,182 @@ system.time({
   
   stopCluster(cl)
 })
+
+
+test <- mapply(FUN = FitGAM, species = params$species, model = params$model, cutoff = params$cutoff)
+
+
+# get results
+dat <- readRDS("_rslurm_slr8547/results_1.RData")
+
+
+# extract data from SlurmCov results
+slurm_codes <- c("_rslurm_slr7735")
+slurm_out <- list()
+outlist <- list()
+# setwd("slurmCovOutput")
+
+for (j in 1:length(slurm_codes)){
+  missing_files <- c()
+  tmpEnv <- new.env()
+  for (i in 0:12) {
+    fname <- paste0("results_", i, 
+                    ".RData")
+    if(fname %in% list.files(slurm_codes[j])){
+      slurm_out <- readRDS(paste0(slurm_codes[j], "/", fname))
+    }else{
+      next
+    }
+    for (k in 1:length(slurm_out)){
+      outdf <- slurm_out[[k]][[1]]
+      if(class(outdf) == "character"){
+        outdf <- data.frame(species = names(slurm_out)[k],
+                            model = NA,
+                            cutoff = NA,
+                            modtime = NA,
+                            AIC = NA,
+                            error = "wrapper code",
+                            cluster = i,
+                            njob = k)
+      }else{
+        if(is.na(slurm_out[[k]][[2]])){
+          outdf <- data.frame(species = names(slurm_out)[k],
+                              model = slurm_out[[k]][[1]]$model,
+                              cutoff = slurm_out[[k]][[1]]$cutoff,
+                              modtime = NA,
+                              AIC = NA,
+                              error = "not enough data",
+                              cluster = i,
+                              njob = k)
+        }else{
+          if(class(slurm_out[[k]][[2]]) == "try-error"){
+            outdf <- data.frame(species = names(slurm_out)[k],
+                                model = NA,
+                                cutoff = NA,
+                                modtime = NA,
+                                AIC = NA,
+                                error = "gam try-error",
+                                cluster = i,
+                                njob = k)
+          }else{
+            outdf$AIC <- AIC(slurm_out[[k]][[2]])
+            outdf$error <- "ok"
+            outdf$cluster <- i
+            outdf$njob <- k
+          }
+        }
+      }
+      outlist[[length(outlist)+1]] <- outdf
+    }
+  }
+}
+
+test <- bind_rows(outlist)
+
+test %>% arrange(cluster, njob ,species, cutoff, model) %>% data.frame()
+
+test2 <- test %>% 
+  group_by(error, cluster, species, model) %>% data.frame()
+
+redo <- test %>% filter(error != "wrapper code")
+
+
+#graveyard
+
+
+system.time({mod <- try(gam(Total ~ 
+                 s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) +
+                 te(lat, lon, Ordinal, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
+               family = nb(theta = NULL, link = "log"),
+               # family = poisson(link = "log"),
+               data = temp,
+               method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
+})
+
+system.time({mod2 <- try(mod7b <- gam(Total ~ 
+                                         s(SiteID, bs = "re", k = 5) +
+                                         s(Reg9Year, bs = "re", k = 5) + 
+                                         ti(Reg9Year, cumdegday, bs = c("re", "cr"), k = c(5, 10)) +
+                                         s(cumdegday, bs = "cr", k = 20) +
+                                         s(Ordinal, bs = "cr", k = 10),
+                                       family = nb(theta = NULL, link = "log"),
+                                       # family = poisson(link = "log"),
+                                       data = temp,
+                                       method = "REML", 
+                                       optimizer = c("outer", "newton"), 
+                                       gamma = 1.4, 
+                                       control = list(maxit = 500)))
+})
+
+
+system.time({mod3 <- try(mod7b <- gam(Total ~ 
+                                         s(SiteID, bs = "re", k = 5) +
+                                         s(Year, bs = "re", k = 5) + 
+                                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)) +
+                                         s(Ordinal, bs = "cr", k = 10),
+                                       family = nb(theta = NULL, link = "log"),
+                                       # family = poisson(link = "log"),
+                                       data = temp,
+                                       method = "REML", 
+                                       optimizer = c("outer", "newton"), 
+                                       gamma = 1.4, 
+                                       control = list(maxit = 500)))
+})
+
+
+system.time({mod4 <- try(gam(Total ~ s(SiteID, bs = "re") + s(Year, bs = "re") +
+                              s(SiteYear, Ordinal, bs = "fs", k = 5, m = 1) +
+                              te(lat, lon, Ordinal, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)),
+                            family = nb(theta = NULL, link = "log"),
+                            # family = poisson(link = "log"),
+                            data = temp,
+                            method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
+})
+
+
+system.time({mod5 <- try(gam(Total ~ s(SiteID, bs = "re") + s(Year, bs = "re") +
+                               s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
+                               te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 15), d = c(2, 1)) +
+                               s(Ordinal, bs = "cr", k = 10),
+                             family = nb(theta = NULL, link = "log"),
+                             # family = poisson(link = "log"),
+                             data = temp,
+                             method = "GCV.Cp", optimizer = "perf", gamma = 1.4, control = list(maxit = 500)))
+})
+
+AIC(mod, mod2, mod3, mod4, mod5)
+
+
+gammod <- mod2
+gammod <- slurm_out[[1]][[2]]
+
+datGAM <- temp
+pred <- gdd %>%
+  dplyr::select(SiteID, SiteYear, yday, cumdegday, lat, lon, region9, year, meanGDD) %>%
+  filter(SiteYear %in% unique(datGAM$SiteYear)) %>% 
+  filter(yday >= 50 & yday <= 340) %>% 
+  dplyr::rename(Ordinal = yday,
+                Year = year)
+pred <- full_join(pred, unique(datGAM[, c("SiteYear", "Reg9Year"), with = FALSE]))
+
+pred$GAM.pred.reg9yr <- as.vector(predict.gam(gammod, pred, type = "response"))
+# pred$GAM.pred.reg9yr <- as.vector(predict.gam(gammod, pred, type = "response",
+#   exclude = c("s(SiteID)")  ))
+pred <- pred %>% 
+  group_by(SiteYear) %>% 
+  mutate(SiteYearGDD = max(cumdegday),
+         Gamma = GAM.pred.reg9yr / sum(GAM.pred.reg9yr))
+pred <- as.data.frame(pred)
+
+c <- ggplot(data = pred, aes(x = cumdegday, y = Gamma, group = SiteID, color = SiteID)) +
+  geom_line(size = 1, alpha = .5) + 
+  theme_bw() + theme(legend.position = "none") +
+  facet_wrap( ~ Year, scales = "free_y") + ggtitle(paste("Scaled Phenology", sp, sep = " "))
+print(c)
+
+d <- ggplot(data = temp, aes(x = cumdegday, y = Total, group = SiteID, color = SiteID)) +
+  geom_point(size = 1, alpha = .5) + 
+  theme_bw() + theme(legend.position = "none") +
+  facet_wrap( ~ Year, scales = "free_y") + ggtitle(paste("Scaled Phenology", sp, sep = " "))
+print(d)
+

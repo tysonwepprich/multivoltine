@@ -8,7 +8,6 @@
 
 # file needs to be edited depending on whether Windows or Linux for package loading
 source('bootstrapMfunctions.R')
-
 allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 
 # choose your species
@@ -37,15 +36,15 @@ allSpecies <- read.csv("data/MultivoltineSpecies.csv", header = TRUE)
 # 10 LWS 3441 ** 476 ** 5332 GEN
 # 11 NBD 3528
 # 12 NPE 3629
-i <- 1
+i <- 8
 
 species <- allSpecies$CommonName[i]
 minBrood <- allSpecies$MinBrood[i]
-maxBrood <- allSpecies$MaxBrood[i] + 1
+maxBrood <- allSpecies$MaxBrood[i]
 
 # somewhat unwieldly, list with each year as a list of 4 (year, counts, surv_covs, site_covs)
-# dat <- SpeciesData(species)
-dat <- SpeciesDataP1(species)
+dat <- SpeciesData(species)
+# dat <- SpeciesDataP1(species)
 
 
 # for each species, select parameters
@@ -72,18 +71,18 @@ for (j in 1:length(dat)){
 
 
 list_index_min_data <- unique(data_avail$list_index[data_avail$both_met >= 5])
-# list_index_min_data <- c(6, 9) # test problem with SSSkip 
+# list_index_min_data <- 13
 
 
 # choose parameter ranges
-raw_cutoff <- 5 # c(5, 10)
-p_cov1 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
+raw_cutoff <- c(5, 10)
+p_cov1 <- c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov2 <- "none" #c("none", 1) # Select detection covariates here (1:7 possible)
 p_cov3 <- "none" #c("none", 2)
 p_cov4 <- "none" #c("none", 1)
-site_covs <- "AnnGDD" # c("AnnGDD", "common") # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
+site_covs <- "AnnGDD" # c("AnnGDD", "lat") # c("common", "AnnGDD", "SprGDD", "lat") # for mu, w 
 M <- c(minBrood:maxBrood) #number of broods to estimate
-sigma.m <- "hom"  #c("het", "hom")
+sigma.m <- "het" #c("het", "hom")
 phi.m <- "const" #c("const", "quad.t")
 
 params <- expand.grid(species, list_index_min_data, raw_cutoff, p_cov1, p_cov2, p_cov3, p_cov4,
@@ -102,11 +101,11 @@ params$param_row <- 1:nrow(params)
 params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # data_file Rdata
-dataIN3 <- c("dat", "params")
-save(list = dataIN3, file = "dataIN3.RData")
+dataIN6 <- c("dat", "params")
+save(list = dataIN6, file = "dataIN6.RData")
 
 # simple param file for slurm.apply
-paramIN3 <- data.frame(nRun = seq(1:nrow(params)))
+paramIN6 <- data.frame(nRun = seq(1:nrow(params)))
 
 # # single core
 # system.time({
@@ -132,9 +131,9 @@ paramIN3 <- data.frame(nRun = seq(1:nrow(params)))
 # saveRDS(test, file = "EUROcovs.rds")
 
 # calculate null hypotheses for M for different species
-testCovs3 <- slurm_apply(f = SlurmCovs, params = paramIN3, 
-                          cpus_per_node = 8, nodes = 4, 
-                          data_file = "dataIN3.RData", 
+testCovs6 <- slurm_apply(f = SlurmCovs, params = paramIN6, 
+                          cpus_per_node = 8, nodes = 3, 
+                          data_file = "dataIN6.RData", 
                           # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                           output = "raw")
 
@@ -195,7 +194,7 @@ baselineDF <- outDF
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("slr6969")
+slurm_codes <- c("slr9417")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -314,6 +313,7 @@ for (j in 5:length(rdsfiles)){
   
   
   # bestmods will be used for LRT statistic to compare to null distribution from simulations
+  ###PROBLEM HERE nullmods can select models with identical ll.val, doesn't pick just one
   bestmods <- baselineDF %>% group_by(list_index, M) %>%
     filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
     filter(maxNest < 1000 * median(baselineDF$maxNest, na.rm = TRUE)) %>%    ##trying to deal with huge N estimates
@@ -359,19 +359,20 @@ source('bootstrapMfunctions.R')
 
 
 rdsfiles <- list.files("simDataGenMode/")
-j <- 6
+j <- 4
+
 
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
 
 SampleList <- readRDS(paste("simDataGenMode/", sp, sep = ""))
 # data_file Rdata
-dataIN <- c("SampleList")
-save(list = dataIN, file = "dataIN.RData")
+dataIN1 <- c("SampleList")
+save(list = dataIN1, file = "dataIN1.RData")
 
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
-cl <- makeCluster(8)
+cl <- makeCluster(4)
 clusterEvalQ(cl, {
   library(devtools)
   library(msm)
@@ -380,26 +381,16 @@ clusterEvalQ(cl, {
   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
   load("dataIN.RData")
 })
-time1 <- system.time({test1 <- parLapply(cl, paramIN$nRun[1:200], SlurmGenerationP1)})
-saveRDS(test1, file = "HOBmboot1.rds")
-time2 <- system.time({test2 <- parLapply(cl, paramIN$nRun[201:400], SlurmGenerationP1)})
-saveRDS(test2, file = "HOBmboot1.rds")
-time3 <- system.time({test3 <- parLapply(cl, paramIN$nRun[401:600], SlurmGenerationP1)})
-saveRDS(test3, file = "HOBmboot3.rds")
-time4 <- system.time({test4 <- parLapply(cl, paramIN$nRun[601:800], SlurmGenerationP1)})
-saveRDS(test4, file = "HOBmboot4.rds")
-time5 <- system.time({test5 <- parLapply(cl, paramIN$nRun[801:1000], SlurmGenerationP1)})
-saveRDS(test5, file = "HOBmboot5.rds")
-
+time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
 stopCluster(cl)
-# error, overwrote mboot1, with misnammed mboot2
 
+saveRDS(test, file = "eurpBSmod.rds")
 
 
 # calculate null hypotheses for same species, different years
-npeBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN, 
-                   cpus_per_node = 8, nodes = 3, 
-                   data_file = "dataIN.RData", 
+rspBS <- slurm_apply(f = SlurmGenerationP1, params = paramIN1, 
+                   cpus_per_node = 8, nodes = 4, 
+                   data_file = "dataIN1.RData", 
                    # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
                    output = "raw")
 
@@ -410,7 +401,7 @@ a <- lapply(test, function(x) as.numeric(unlist(x[[1]]$time)))
 
 
 # extract data from SlurmGeneration results
-slurm_codes <- c("slr1729")
+slurm_codes <- c("slr3603")
 slurm_out <- list()
 # setwd("slurmCovOutput")
 
@@ -433,8 +424,8 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-# outList <- readRDS("npeBSmod.rds")
-outList <- slurm_out
+outList <- readRDS("eurpBSmod.rds")
+# outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
   if (length(outList[[i]]) == 1){
@@ -505,7 +496,7 @@ BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
 # BSmods <- BSmods %>% filter(param_row == 12)
 
 # from baselineDF from slurmCov
-slurm_out<- readRDS("slurmCovOutput/BLSWALLslurmcovs.rds")
+slurm_out<- readRDS("slurmCovOutput/EURcov.rds")
 
 outList <- slurm_out
 outDF <- list()
@@ -538,7 +529,11 @@ baselineDF <- outDF
 
 bestmods <- baselineDF %>% group_by(list_index, M) %>%
   filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
+  mutate(tempindex = length(ll.val)) %>%
+  filter(tempindex == 1) %>%
+  select(-tempindex) %>%
   arrange(list_index)
+
 
 
 # tests <- baselineDF[c(2, 3, 7),]
@@ -553,8 +548,8 @@ for (i in 1:length(unique(bestmods$list_index))){
   testM <- testM[-which(testM == max(testM))]
   out <- data.frame()
   for (m in testM){
-    tempBSmods <- BSmods %>% filter(list_index == tempindex) %>%
-      filter(M == m & model == "null" | M == m + 1 & model == "alt")
+    tempBSmods <- BSmods %>% dplyr::filter(list_index == tempindex) %>%
+      dplyr::filter(M == m & model == "null" | M == (m + 1) & model == "alt")
     if (nrow(tempBSmods) == 0){
       pval <- data.frame(nullM = m, pval = NA, nfits = 0, nullNA = NA, altNA = NA)
     } else {

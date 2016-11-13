@@ -6,6 +6,7 @@ mLLMixtCounts.fit <- function(p.m = "common", w.m = "common", mu.m = "common", s
   this.fit <- NA
   this.fit <- try(optim(par=pars.start,fn=mLLMixtCounts.fun,method="L-BFGS-B",
                         hessian=F,control=list(maxit=10000,trace=1)), silent = TRUE) #maxit usually 10000, trace = 6
+                        # hessian=T,control=list(maxit=10000,trace=1)), silent = TRUE) #maxit usually 10000, trace = 6
   # this.fit <- try(optim(par=pars.start,fn=mLLMixtCounts.fun,method="L-BFGS-B",
   #                       lower = c(0, -Inf, -Inf, -Inf, 0, -Inf, -Inf, logit(.2), -Inf, -Inf),
   #                       upper = c(10000000, Inf, Inf, Inf, log(31), Inf, Inf, logit(.8), Inf, Inf),
