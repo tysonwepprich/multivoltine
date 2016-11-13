@@ -3,15 +3,15 @@
 # models <- phiout[13]
 # models <- slurm_out[6][[1]]
 # models <- base_out[[23]]
-models <- slurm_out[[166]]
+models <- slurm_out[[38]]
 
-dat <- SpeciesData(allSpecies$CommonName[18])
-counts <- dat[[15]]$counts
+dat <- SpeciesData(allSpecies$CommonName[14])
+counts <- dat[[13]]$counts
 matplot(t(counts), type = "l")
 # counts <- count_array[,,32] #select species here, number corresponds to row in species_list
 
 # select sites with enough individuals counted
-siteRows <- which(rowSums(counts, na.rm = TRUE) >= 5)
+siteRows <- which(rowSums(counts, na.rm = TRUE) >= 10)
 counts <- counts[siteRows, ]
 # counts[is.na(counts)] <- -1
 
