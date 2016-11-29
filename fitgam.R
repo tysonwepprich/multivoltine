@@ -1,4 +1,4 @@
-#final!
+#final! NOT
 #1-80 species at 4 cpus per node
 #461219, slr 7580
 #81-100 species at 2 cpus per node
@@ -10,7 +10,16 @@
 #461231, slr7035
 #worked with no wrapper code errors
 
-#trying again after errors with starttime. Trying first 100 species
+
+#final final
+#cov strict
+#1-80 slr5705
+#81-100 slr5733
+#101-115 slr 5757
+#116-122 slr 5771
+#cov loose
+#1-80 slr3258
+#81-100 slr3863
 
 source('bootstrapMfunctions.R')
 
@@ -140,9 +149,9 @@ species <- SpeciesList %>% arrange(Present) %>% select(CommonName)
 
 
 # models <-  c("mod1", "mod1simp", "mod2", "mod2simp", "mod1cov", "mod1covsimp", "mod2cov", "mod2covsimp", "overparam")
-models <- c("orig", "extra")
-cutoff <- c("strict", "loose")
-params <- expand.grid(species$CommonName[1:80], models, cutoff,
+models <- "cov" #c("orig", "extra")
+cutoff <- "loose" # c("strict", "loose")
+params <- expand.grid(species$CommonName[81:100], models, cutoff,
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "model", "cutoff")
 
@@ -434,11 +443,41 @@ FitGAM <- function(species, model, cutoff){
           pars$reduced <- "yes"
           
           }
+      }
+      
+      if(model == "cov"){
+        mod <- try(gam(Total ~      
+                         s(listlength)+s(temperature)+s(duration)+
+                         s(SiteID, bs = "re", k = 5) +
+                         s(Reg9Year, cumdegday, bs = "fs", k = 5, m = 1) +
+                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 20), d = c(2, 1)) +
+                         s(Ordinal, bs = "cr", k = 10),
+                       family = nb(theta = NULL, link = "log"),
+                       # family = poisson(link = "log"),
+                       data = temp,
+                       method = "REML", 
+                       optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+        if(class(mod)=="try-error"){
+          mod <- try(gam(Total ~      
+                           s(listlength)+s(temperature)+s(duration)+
+                           s(SiteID, bs = "re", k = 5) +
+                           s(Reg9Year, cumdegday, bs = "fs", k = 5, m = 1) +
+                           s(cumdegday, bs = "tp", k = 20) +
+                           s(Ordinal, bs = "cr", k = 10),
+                         family = nb(theta = NULL, link = "log"),
+                         # family = poisson(link = "log"),
+                         data = temp,
+                         method = "REML", 
+                         optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+          pars$reduced <- "yes"
+          
         }
+      }
+      
     } 
   }
   
-  pars$modtime <- as.numeric(Sys.time() - starttime)
+  pars$modtime <- as.period(interval(starttime, Sys.time()))@minute
   outlist <- list()
   outlist[[1]] <- pars
   outlist[[2]] <- mod
@@ -449,11 +488,11 @@ test <- mapply(FUN = FitGAM, species = params$species, model = params$model, cut
 
 
 # get results
-dat <- readRDS("_rslurm_slr8547/results_1.RData")
+# dat <- readRDS("_rslurm_slr8547/results_1.RData")
 
 
 # extract data from SlurmCov results
-slurm_codes <- c("_rslurm_slr7735")
+slurm_codes <- c("_rslurm_slr5771")
 slurm_out <- list()
 outlist <- list()
 # setwd("slurmCovOutput")
@@ -471,6 +510,7 @@ for (j in 1:length(slurm_codes)){
     }
     for (k in 1:length(slurm_out)){
       outdf <- slurm_out[[k]][[1]]
+      
       if(class(outdf) == "character"){
         outdf <- data.frame(species = names(slurm_out)[k],
                             model = NA,
@@ -505,6 +545,7 @@ for (j in 1:length(slurm_codes)){
             outdf$error <- "ok"
             outdf$cluster <- i
             outdf$njob <- k
+            saveRDS(slurm_out[[k]], paste(outdf$species, outdf$model, outdf$cutoff, "rds", sep = "."))
           }
         }
       }
@@ -515,7 +556,8 @@ for (j in 1:length(slurm_codes)){
 
 test <- bind_rows(outlist)
 
-test %>% arrange(cluster, njob ,species, cutoff, model) %>% data.frame()
+test <- test %>% arrange(species, model, cutoff) %>% data.frame()
+saveRDS(test, "species1to80GAMsummarypart2.rds")
 
 test2 <- test %>% 
   group_by(error, cluster, species, model) %>% data.frame()
