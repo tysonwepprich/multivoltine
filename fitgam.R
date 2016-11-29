@@ -138,7 +138,7 @@ species <- SpeciesList %>% arrange(Present) %>% select(CommonName)
 # models <-  c("mod1", "mod1simp", "mod2", "mod2simp", "mod1cov", "mod1covsimp", "mod2cov", "mod2covsimp", "overparam")
 models <- c("orig", "extra")
 cutoff <- c("strict", "loose")
-params <- expand.grid(species$CommonName[1:80], models, cutoff,
+params <- expand.grid(species$CommonName, models, cutoff,
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "model", "cutoff")
 
@@ -147,7 +147,7 @@ names(params) <- c("species", "model", "cutoff")
 #redoing wrapper errors
 ok <- redo %>% select(species, model, cutoff)
 params <- anti_join(params, ok)
-# params <- params[c(25:30),]
+params <- params[c(17:20),]
 
 
 params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
@@ -172,23 +172,26 @@ ty <- slurm_apply(f = FitGAM, params = params, nodes = 1,
                   add_objects = c("gdd", "data", "surveys", "covdata", "site_geo", "params"),
                   slurm_options = list(partition = "sesynctest"))
 
-test <- mapply(FUN = FitGAM, species = params$species, model = params$model)
+test <- mapply(FUN = FitGAM, species = params$species, model = params$model, cutoff = params$cutoff)
 
 
 
 # gamlist <- as.list(species$CommonName)
-# for (i in 1:nrow(species)){
+for (i in 1:nrow(params)){
+  sp <- species <- params$species[i]
+  model <- params$model[i]
+  cutoff <- params$cutoff[i]
 # FitGAM <- function(nRow){
-FitGAM <- function(species, model, cutoff){
-  sp <- species
-  model <- model
-  cutoff <- cutoff
+# FitGAM <- function(species, model, cutoff){
+  # sp <- species
+  # model <- model
+  # cutoff <- cutoff
   reduced <- NA
   pars <- data.frame(species, model, cutoff, reduced)
   # pars <- params[nRow,]
   # sp <- pars$species
   # model <- pars$model
-  counts <- data %>% filter(CommonName == sp)
+  counts <- data %>% filter(CommonName == sp) %>% data.table()
   counts[, Ordinal := yday(SiteDate)]
   counts[, Year := year(SiteDate)]
   
@@ -205,9 +208,17 @@ FitGAM <- function(species, model, cutoff){
   counts <- merge(counts, covdata, by = "SeqID", all.x = TRUE, all.y = FALSE)
   counts$temperature[which(counts$temperature < 50)] <- NA
   counts$duration[which(counts$duration == 0)] <- NA
-  counts$listlength <- scale(counts$listlength)
-  counts$temperature <- scale(counts$temperature)
-  counts$duration <- scale(counts$duration)
+  
+  # #scaled over whole season/state
+  # counts$listlength <- scale(counts$listlength)
+  # counts$temperature <- scale(counts$temperature)
+  # counts$duration <- scale(counts$duration)
+  #scaled by region9/week
+  counts <- counts[, `:=` (zlistlength = as.numeric(scale(listlength)),
+                           ztemperature = as.numeric(scale(temperature)),
+                           zduration = as.numeric(scale(duration))),
+                   by = list(region9, Week)]
+                            
   
   # trying to add GDD instead of ordinal date
   counts <- merge(counts, gdd, by = c("SiteID", "SiteDate", "lat", "lon", "region9", "region4"), all.x = TRUE, all.y = FALSE)
@@ -251,12 +262,17 @@ FitGAM <- function(species, model, cutoff){
       # pad zeros at beginning and end for GAM fitting
       zeros <- c(50, 60, 330, 340)
       tempdf <- expand.grid(unique(temp$SiteID), zeros)
-      names(tempdf) <- c("SiteID", "Ordinal")
+      names(tempdf) <- c("SiteID", "yday")
+      tempdf$year <- y
       tempdf$listlength <- 0
       tempdf$temperature <- 0
       tempdf$duration <- 0
       tempdf$Total <- 0
-      tempdf$cumdegday <- c(rep(0, nrow(tempdf)/2), rep(max(temp$cumdegday), nrow(tempdf)/2))
+      tempdf <- left_join(tempdf, gdd[,c("SiteID", "year", "yday", "cumdegday")], 
+                          by = c("SiteID", "year", "yday"))
+      names(tempdf)[2] <- "Ordinal"
+      tempdf$year <- NULL
+      # tempdf$cumdegday <- c(rep(0, nrow(tempdf)/2), rep(max(temp$cumdegday), nrow(tempdf)/2))
       
       test <- merge(tempdf, distinct(dplyr::select(temp, SiteID, region9, lat, lon, Year)),
                     by = "SiteID", all.x = TRUE, all.y = FALSE)
@@ -271,7 +287,17 @@ FitGAM <- function(species, model, cutoff){
     dat$temperature[which(is.na(dat$temperature))] <- 0
     dat$duration[which(is.na(dat$duration))] <- 0
     dat$Reg9Year <- as.factor(paste(dat$region9, dat$Year, sep = "_"))
-
+###
+    #this chunk was in sesync code, but not others for fitgam!
+    #throws out some SiteYears I didn't expect
+    
+    dat <- dat %>%
+      group_by(region9) %>%
+      mutate(uniqSiteYear = length(unique(SiteYear))) %>%
+      filter(uniqSiteYear > 1)
+    ###
+    
+    
     temp <- dat
 
     if(sum(temp$Total) < 20|length(unique(temp$SiteID)) < 2|length(unique(temp$Year)) < 2|
@@ -340,7 +366,35 @@ FitGAM <- function(species, model, cutoff){
           pars$reduced <- "yes"
           
           }
+      }
+      
+      if(model == "region"){
+        temp$region9 <- as.factor(temp$region9)
+        mod <- try(gam(Total ~ 
+                         s(SiteYear, bs = "re", k = 5) +
+                         s(cumdegday, bs = "cr", k = 20, by = region9),
+                       family = nb(theta = NULL, link = "log"),
+                       # family = poisson(link = "log"),
+                       data = temp,
+                       method = "REML", 
+                       optimizer = c("outer", "newton"), 
+                       gamma = 1.4, 
+                       control = list(maxit = 500)))
+        if(class(mod)=="try-error"){
+          mod <- try(gam(Total ~ 
+                           s(SiteYear, bs = "re", k = 5) +
+                           s(cumdegday, bs = "cr", k = 20),
+                         family = nb(theta = NULL, link = "log"),
+                         # family = poisson(link = "log"),
+                         data = temp,
+                         method = "REML", 
+                         optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+          pars$reduced <- "yes"
+          
         }
+      }
+      
+      
     } 
   }
   
@@ -348,13 +402,15 @@ FitGAM <- function(species, model, cutoff){
   outlist <- list()
   outlist[[1]] <- pars
   outlist[[2]] <- mod
-  return(outlist)
+  # return(outlist)
+  saveRDS(outlist, paste(species, model, cutoff, "rds", sep = "."))
 }
+
 
 library(parallel)
 # multicore
 system.time({
-  cl <- makeCluster(4)
+  cl <- makeCluster(2)
   clusterEvalQ(cl, {
     library(mclust)
     library(data.table)
@@ -379,8 +435,9 @@ system.time({
   stopCluster(cl)
 })
 
-
-test <- mapply(FUN = FitGAM, species = params$species, model = params$model, cutoff = params$cutoff)
+system.time({test <- mapply(FUN = FitGAM, species = params$species, model = params$model,
+                            cutoff = params$cutoff)
+})
 
 
 # get results
@@ -524,7 +581,7 @@ system.time({mod5 <- try(gam(Total ~ s(SiteID, bs = "re") + s(Year, bs = "re") +
 AIC(mod, mod2, mod3, mod4, mod5)
 
 
-gammod <- mod2
+gammod <- test[[2]]
 gammod <- slurm_out[[1]][[2]]
 
 datGAM <- temp
