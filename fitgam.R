@@ -1,4 +1,4 @@
-
+#final! NOT
 #final!
 #1-80 species at 4 cpus per node
 #461219, slr 7580
@@ -11,7 +11,21 @@
 #461231, slr7035
 #worked with no wrapper code errors
 
-#trying again after errors with starttime. Trying first 100 species
+
+#final final
+#cov strict
+#1-80 slr5705
+#81-100 slr5733
+#101-115 slr 5757
+#116-122 slr 5771
+#cov loose
+#1-80 slr3258
+#81-100 slr3863
+
+#cov strict reparameterized covs to compare with last cov.strict
+#slr 6957, 6912, 6894, 6873, 6848, 6823, 6799, 6742
+#cov loose for 1-95 species
+#slr 4827, 4859, 4877
 
 source('bootstrapMfunctions.R')
 
@@ -22,7 +36,7 @@ library(stringr)
 library(mclust)
 ScaleSumTo1 <- function(x){x/sum(x)}
 
-
+library(rslurm)
 
 # try with any species
 
@@ -136,21 +150,27 @@ SpeciesList <- readRDS("data/SpeciesList.rds")
 species <- SpeciesList %>% arrange(Present) %>% select(CommonName)
 
 # models <-  c("mod1", "mod1simp", "mod2", "mod2simp", "mod1cov", "mod1covsimp", "mod2cov", "mod2covsimp", "overparam")
-models <- c("orig", "extra")
-cutoff <- c("strict", "loose")
+models <- "cov" #c("orig", "extra")
+cutoff <- "loose" #c("strict", "loose")
 params <- expand.grid(species$CommonName, models, cutoff,
                       stringsAsFactors = FALSE)
 names(params) <- c("species", "model", "cutoff")
-
-#testing
-# params <- params %>% filter(species == "Carolina Satyr")
-#redoing wrapper errors
-ok <- redo %>% select(species, model, cutoff)
-params <- anti_join(params, ok)
-params <- params[c(17:20),]
+params <- params[c(86:95),]
 
 
-params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
+ty <- slurm_apply(f = FitGAM, params = params, nodes = 1,
+                  cpus_per_node = 1, 
+                  add_objects = c("gdd", "data", "surveys", "covdata", "site_geo", "params"),
+                  slurm_options = list(partition = "sesyncshared"))
+# #testing
+# # params <- params %>% filter(species == "Carolina Satyr")
+# #redoing wrapper errors
+# ok <- redo %>% select(species, model, cutoff)
+# params <- anti_join(params, ok)
+# params <- params[c(17:20),]
+
+
+# params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 
 # # data_file Rdata
 # dataIN <- c("gdd", "data", "surveys", "covdata", "site_geo", "params")
@@ -167,25 +187,23 @@ params <- params[sample(1:nrow(params)), ] #rearrange for parallel comp speed
 #                          data_file = "dataIN.RData", 
 #                          # pkgs = c("devtools", "msm", "rslurm", "StopoverCode"), 
 #                          output = "raw")
-ty <- slurm_apply(f = FitGAM, params = params, nodes = 1,
-                  cpus_per_node = 4, 
-                  add_objects = c("gdd", "data", "surveys", "covdata", "site_geo", "params"),
-                  slurm_options = list(partition = "sesynctest"))
 
-test <- mapply(FUN = FitGAM, species = params$species, model = params$model, cutoff = params$cutoff)
+
+test2 <- mapply(FUN = FitGAM, species = params$species[69:70], 
+               model = params$model[69:70], cutoff = params$cutoff[69:70])
 
 
 
 # gamlist <- as.list(species$CommonName)
-for (i in 1:nrow(params)){
-  sp <- species <- params$species[i]
-  model <- params$model[i]
-  cutoff <- params$cutoff[i]
+# for (i in 1:nrow(params)){
+  # sp <- species <- params$species[i]
+  # model <- params$model[i]
+  # cutoff <- params$cutoff[i]
 # FitGAM <- function(nRow){
-# FitGAM <- function(species, model, cutoff){
-  # sp <- species
-  # model <- model
-  # cutoff <- cutoff
+FitGAM <- function(species, model, cutoff){
+  sp <- species
+  model <- model
+  cutoff <- cutoff
   reduced <- NA
   pars <- data.frame(species, model, cutoff, reduced)
   # pars <- params[nRow,]
@@ -214,11 +232,14 @@ for (i in 1:nrow(params)){
   # counts$temperature <- scale(counts$temperature)
   # counts$duration <- scale(counts$duration)
   #scaled by region9/week
-  counts <- counts[, `:=` (zlistlength = as.numeric(scale(listlength)),
-                           ztemperature = as.numeric(scale(temperature)),
-                           zduration = as.numeric(scale(duration))),
+  counts <- counts[, `:=` (zlistlength = as.numeric(scale(log(listlength+1)))),
                    by = list(region9, Week)]
-                            
+  # counts <- counts[, `:=` (
+  #                          ztemperature = as.numeric(scale(temperature))),
+  #                  by = list(region9)]
+  counts <- counts[, `:=` (ztemperature = as.numeric(scale(temperature)))]
+  counts <- counts[, `:=` (zduration = as.numeric(scale(duration)))]
+  
   
   # trying to add GDD instead of ordinal date
   counts <- merge(counts, gdd, by = c("SiteID", "SiteDate", "lat", "lon", "region9", "region4"), all.x = TRUE, all.y = FALSE)
@@ -229,7 +250,7 @@ for (i in 1:nrow(params)){
                            YearTotal = sum(Total)), 
                    by = list(SiteID, Year)]
   
-
+  
   if(cutoff == "strict"){
     datGAM <- counts[YearTotal >= 3]
     datGAM <- datGAM[SurvPerYear >= 15]
@@ -256,7 +277,8 @@ for (i in 1:nrow(params)){
                SurvSeen = length(which(Total > 0))) %>%
         filter(YearTotal > 0,
                SurvSeen > 0) %>%
-        dplyr::select(SiteID, Total, listlength, lat, lon, region9, Ordinal, Year, temperature, duration, cumdegday) %>% 
+        dplyr::select(SiteID, Total, zlistlength, lat, lon, region9, Ordinal, 
+                      Year, ztemperature, zduration, cumdegday) %>% 
         data.frame()
       
       # pad zeros at beginning and end for GAM fitting
@@ -264,9 +286,9 @@ for (i in 1:nrow(params)){
       tempdf <- expand.grid(unique(temp$SiteID), zeros)
       names(tempdf) <- c("SiteID", "yday")
       tempdf$year <- y
-      tempdf$listlength <- 0
-      tempdf$temperature <- min(temp$temperature)
-      tempdf$duration <- 0
+      tempdf$zlistlength <- 0
+      tempdf$ztemperature <- min(temp$ztemperature)
+      tempdf$zduration <- 0
       tempdf$Total <- 0
       tempdf <- left_join(tempdf, gdd[,c("SiteID", "year", "yday", "cumdegday")], 
                           by = c("SiteID", "year", "yday"))
@@ -284,10 +306,10 @@ for (i in 1:nrow(params)){
     dat$Year <- as.factor(as.character(dat$Year))
     dat$SiteID <- as.factor(as.character(dat$SiteID))
     dat$SiteYear <- as.factor(paste(dat$SiteID, dat$Year, sep = "_"))
-    dat$temperature[which(is.na(dat$temperature))] <- 0
-    dat$duration[which(is.na(dat$duration))] <- 0
+    dat$ztemperature[which(is.na(dat$ztemperature))] <- 0
+    dat$zduration[which(is.na(dat$zduration))] <- 0
     dat$Reg9Year <- as.factor(paste(dat$region9, dat$Year, sep = "_"))
-###
+    ###
     #this chunk was in sesync code, but not others for fitgam!
     #throws out some SiteYears I didn't expect
     
@@ -299,13 +321,13 @@ for (i in 1:nrow(params)){
     
     
     temp <- dat
-
+    
     if(sum(temp$Total) < 20|length(unique(temp$SiteID)) < 2|length(unique(temp$Year)) < 2|
        length(unique(temp$SiteYear))<5|length(unique(temp$Reg9Year))<2) {
       mod <- NA
     }else{
       
-
+      
       if(model == "orig"){
         mod <- try(gam(Total ~ 
                          s(SiteID, bs = "re", k = 5) +
@@ -320,7 +342,7 @@ for (i in 1:nrow(params)){
                        optimizer = c("outer", "newton"), 
                        gamma = 1.4, 
                        control = list(maxit = 500)))
-
+        
         
         if(class(mod)=="try-error"){
           mod <- try(gam(Total ~ 
@@ -352,7 +374,7 @@ for (i in 1:nrow(params)){
                        data = temp,
                        method = "REML", 
                        optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
-
+        
         if(class(mod)=="try-error"){
           mod <- try(gam(Total ~ 
                            s(SiteYear, cumdegday, bs = "fs", k = 5, m = 1) +
@@ -365,7 +387,38 @@ for (i in 1:nrow(params)){
                          optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
           pars$reduced <- "yes"
           
-          }
+        }
+      }
+      
+      if(model == "cov"){
+        mod <- try(gam(Total ~      
+                         s(zlistlength)+
+                         s(ztemperature)+
+                         # s(zduration)+
+                         s(SiteID, bs = "re", k = 5) +
+                         s(Reg9Year, cumdegday, bs = "fs", k = 5, m = 1) +
+                         te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 20), d = c(2, 1)) +
+                         s(Ordinal, bs = "cr", k = 10),
+                       family = nb(theta = NULL, link = "log"),
+                       # family = poisson(link = "log"),
+                       data = temp,
+                       method = "REML", 
+                       optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+        if(class(mod)=="try-error"){
+          mod <- try(gam(Total ~      
+                           s(zlistlength)+
+                           s(ztemperature)+s(zduration)+
+                           s(SiteID, bs = "re", k = 5) +
+                           s(Reg9Year, cumdegday, bs = "fs", k = 5, m = 1) +
+                           s(cumdegday, bs = "tp", k = 20) +
+                           s(Ordinal, bs = "cr", k = 10),
+                         family = nb(theta = NULL, link = "log"),
+                         # family = poisson(link = "log"),
+                         data = temp,
+                         method = "REML", 
+                         optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+          pars$reduced <- "yes"
+        }
       }
       
       if(model == "region"){
@@ -393,17 +446,15 @@ for (i in 1:nrow(params)){
           
         }
       }
-      
-      
-    } 
+    }
   }
   
-  pars$modtime <- as.numeric(Sys.time() - starttime)
+  pars$modtime <- as.period(interval(starttime, Sys.time()))@minute
   outlist <- list()
   outlist[[1]] <- pars
   outlist[[2]] <- mod
-  # return(outlist)
-  saveRDS(outlist, paste(species, model, cutoff, "rds", sep = "."))
+  return(outlist)
+  # saveRDS(outlist, paste(species, model, cutoff, "rds", sep = "."))
 }
 
 
@@ -441,11 +492,18 @@ system.time({test <- mapply(FUN = FitGAM, species = params$species, model = para
 
 
 # get results
-dat <- readRDS("_rslurm_slr8547/results_1.RData")
-
+# dat <- readRDS("_rslurm_slr8547/results_1.RData")
 
 # extract data from SlurmCov results
-slurm_codes <- c("_rslurm_slr7735")
+slurm_codes <- c("_rslurm_slr6823",
+                 "_rslurm_slr6848",
+                 "_rslurm_slr6873",
+                 "_rslurm_slr6894",
+                 "_rslurm_slr6912",
+                 "_rslurm_slr6957",
+                 "_rslurm_slr4827",
+                 "_rslurm_slr4859",
+                 "_rslurm_slr4877")
 slurm_out <- list()
 outlist <- list()
 # setwd("slurmCovOutput")
@@ -463,6 +521,7 @@ for (j in 1:length(slurm_codes)){
     }
     for (k in 1:length(slurm_out)){
       outdf <- slurm_out[[k]][[1]]
+      
       if(class(outdf) == "character"){
         outdf <- data.frame(species = names(slurm_out)[k],
                             model = NA,
@@ -497,6 +556,7 @@ for (j in 1:length(slurm_codes)){
             outdf$error <- "ok"
             outdf$cluster <- i
             outdf$njob <- k
+            saveRDS(slurm_out[[k]], paste(outdf$species, outdf$model, "rev", outdf$cutoff, "rds", sep = "."))
           }
         }
       }
@@ -507,7 +567,8 @@ for (j in 1:length(slurm_codes)){
 
 test <- bind_rows(outlist)
 
-test %>% arrange(cluster, njob ,species, cutoff, model) %>% data.frame()
+test <- test %>% arrange(species, model, cutoff) %>% data.frame()
+saveRDS(test, "species1to80GAMsummarypart2.rds")
 
 test2 <- test %>% 
   group_by(error, cluster, species, model) %>% data.frame()
