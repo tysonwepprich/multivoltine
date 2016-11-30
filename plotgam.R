@@ -6,9 +6,12 @@ path <- "C:/Users/Tyson/Desktop/GAMs/"
 gams <- list.files(path)
 
 # gamsfilter <- grep(pattern = "region.loose", x = gams)
-gamsfilter <- grep(pattern = "cov.strict", x = gams)
+gamsfilter <- grep(pattern = "cov.rev.strict", x = gams)
 # gamsfilter <- grep(pattern = "extra.strict", x = gams)
-gamsfilter <- grep(pattern = "strict", x = gams)
+
+gams<- gams[grep(pattern = "cov", x = gams)]
+gams<- gams[grep(pattern = "strict", x = gams)]
+
 
 ######### basic data needs
 

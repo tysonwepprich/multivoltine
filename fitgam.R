@@ -265,7 +265,7 @@ for (i in 1:nrow(params)){
       names(tempdf) <- c("SiteID", "yday")
       tempdf$year <- y
       tempdf$listlength <- 0
-      tempdf$temperature <- 0
+      tempdf$temperature <- min(temp$temperature)
       tempdf$duration <- 0
       tempdf$Total <- 0
       tempdf <- left_join(tempdf, gdd[,c("SiteID", "year", "yday", "cumdegday")], 
