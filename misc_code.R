@@ -1,16 +1,3 @@
-# for gamlist, half size of file by removing redundant gam model
-
-fs <- list.files('gamOrdinal')
-for (i in 1:length(fs)){
-  gamlist <- readRDS(paste("gamOrdinal", fs[i], sep = "/"))
-  if("gam" %in% class(gamlist$mod)){
-    if("gam" %in% class(gamlist$modgdd)){
-      gamlist$modgdd <- NULL
-      saveRDS(gamlist, file = paste("gamOrdinal", fs[i], sep = "/"))
-    }
-  }
-}
-
 # looking at raw counts to see why some years suck at separating N and P
 
 

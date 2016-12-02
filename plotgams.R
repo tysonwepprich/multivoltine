@@ -9,7 +9,7 @@ gams <- list.files(path)
 gamsfilter <- grep(pattern = "cov.rev.strict", x = gams)
 # gamsfilter <- grep(pattern = "extra.strict", x = gams)
 
-gams<- gams[grep(pattern = "cov", x = gams)]
+# gams<- gams[grep(pattern = "cov", x = gams)]
 gams<- gams[grep(pattern = "strict", x = gams)]
 
 
@@ -139,6 +139,7 @@ gdd_tomerge <- gdd %>% dplyr::select(SiteYear, yday, cumdegday) %>%
 
 #unknown what cutoff to use for chap2 and chap3 species
 
+#takes a long time to run
 gamresults <- list()
 for (i in 1:length(gams)){
   gamlist <- readRDS(paste(path, gams[i], sep = "/")) 
@@ -158,8 +159,15 @@ for (i in 1:length(gams)){
   gamresults[[i]] <- gamdf
 }
 gamresdf <- bind_rows(gamresults)
-
-
+resdf <- gamresdf[is.na(gamresdf$species)==FALSE,]
+resdf <- resdf %>% group_by(species) %>% mutate(num = 1:length(model))
+resdf$model <- paste(resdf$model, resdf$num, sep = ".")
+resdf$CommonName <- NULL
+resdf$num <- NULL
+resdf$cutoff <- NULL
+resdf <- resdf %>% arrange(species, AIC) %>% group_by(species) %>% mutate(delta = AIC - min(AIC))
+resdf %>% group_by(model) %>% summarise(meandelta = mean(delta))
+saveRDS(resdf, "modelsummaryAIC.rds")
 
 for (i in gamsfilter){
   
@@ -272,9 +280,22 @@ for (i in gamsfilter){
   
   temp <- dat
   
-  
-  
-  gammod <- gamlist[[2]]
+  # mod2 <- try(gam(Total ~
+  #                  # s(listlength)+
+  #                  # s(temperature)+
+  #                  # s(duration)+
+  #                  s(SiteID, bs = "re", k = 5) +
+  #                  s(Reg9Year, cumdegday, bs = "fs", k = 5, m = 1) +
+  #                  te(lat, lon, cumdegday, bs = c("tp", "tp"), k = c(5, 20), d = c(2, 1)) +
+  #                  s(Ordinal, bs = "cr", k = 10),
+  #                family = nb(theta = NULL, link = "log"),
+  #                # family = poisson(link = "log"),
+  #                data = temp,
+  #                method = "REML",
+  #                optimizer = c("outer", "newton"), gamma = 1.4, control = list(maxit = 500)))
+
+  gammod <- mod.extra
+  # gammod <- mod1
   datGAM <- temp
   
   
@@ -286,16 +307,20 @@ for (i in gamsfilter){
     dplyr::rename(Ordinal = yday,
                   Year = year)
   pred <- full_join(pred, unique(datGAM[, c("SiteYear", "Reg9Year")]))
-  pred$listlength <- 0
-  pred$temperature <- 0
-  pred$duration <- 0
+  # pred$listlength <- 0
+  # pred$temperature <- 0
+  # pred$duration <- 0
+  pred$zlistlength <- 0
+  pred$ztemperature <- 0
+  pred$zduration <- 0
   pred$GAM.pred <- as.vector(predict.gam(gammod, pred, type = "response"))
-  # pred$GAM.pred.basic <- as.vector(predict.gam(gammod, pred, type = "response",
-  #                                              exclude = c("s(listlength)",
-  #                                                          "s(temperature)",
-  #                                                          "s(duration)",
-  #                                                          "s(SiteID)")))
   
+  pred$GAM.pred.basic <- as.vector(predict.gam(gammod, pred, type = "response",
+                                               exclude = c("s(zlistlength)",
+                                                           "s(ztemperature)",
+                                                           "s(zduration)",
+                                                           "s(SiteID)")))
+
   pred <- pred %>%
     group_by(SiteYear) %>%
     mutate(SiteYearGDD = max(cumdegday),
@@ -360,7 +385,7 @@ for (i in gamsfilter){
     facet_wrap( ~ Year, scales = "free_y") + ggtitle(paste("GAM Predictions", sp, sep = " "))
   # print(c)
   
-  cc <- ggplot(data = pred, aes(x = cumdegday, y = GAM.pred, group = region9, color = region9)) +
+  cc <- ggplot(data = pred, aes(x = cumdegday, y = GAM.pred.basic, group = region9, color = region9)) +
     geom_line(size = 1, alpha = .5) +
     theme_bw() + theme(legend.position = "right") +
     geom_point(data = tempcounts, aes(x = cumdegday, y = Total), alpha = .3)+
@@ -379,19 +404,19 @@ for (i in gamsfilter){
     facet_wrap( ~ region9, scales = "free_y") + ggtitle(paste("GAM Predictions", sp, sep = " "))
   
   #######################
-  pdf(paste(sp, "yearPhenExtra", ".pdf", sep = ""), width = 13, height = 8)
+  pdf(paste(sp, "yearCovExcl", ".pdf", sep = ""), width = 13, height = 8)
   print(c)
   dev.off()
   
-  pdf(paste(sp, "yearPhenExtraCounts", ".pdf", sep = ""), width = 13, height = 8)
+  pdf(paste(sp, "yearCovExclCounts", ".pdf", sep = ""), width = 13, height = 8)
   print(cc)
   dev.off()
 
-  pdf(paste(sp, "regionPhenExtra", ".pdf", sep = ""), width = 10, height = 6)
+  pdf(paste(sp, "regionCovExcl", ".pdf", sep = ""), width = 10, height = 6)
   print(cb)
   dev.off()
   
-  pdf(paste(sp, "regionPhenExtraCounts", ".pdf", sep = ""), width = 10, height = 6)
+  pdf(paste(sp, "regionCovExclCounts", ".pdf", sep = ""), width = 10, height = 6)
   print(d)
   dev.off()
   

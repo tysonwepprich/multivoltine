@@ -15,7 +15,7 @@ library(readr)
 library(reshape)
 library(reshape2)
 library(data.table)
-# library(rslurm)
+library(rslurm)
 
 #testing change
 
@@ -24,13 +24,13 @@ library(data.table)
 # source('FunctionsFixedForUnivoltineCaseMultipleDetectionCovariates.R')
 
 # for linux/sesync cluster
-remove.packages('StopoverCode') # do this to rebuild after edits
-install.packages("StopoverCode", repos = NULL, type="source")
-library(StopoverCode)
+# remove.packages('StopoverCode') # do this to rebuild after edits
+# install.packages("StopoverCode", repos = NULL, type="source")
+# library(StopoverCode)
 
 # for windows laptop
 # load_all works, not install.package
-# devtools::load_all("StopoverCode", recompile = TRUE)
+devtools::load_all("StopoverCode", recompile = TRUE)
 
 
 
@@ -1005,8 +1005,8 @@ SlurmGeneration <- function(nRun){
 BSpval <- function(nullM, spec, BSmods, baselineDF){
   nullM <- nullM
   spec <- spec
-  origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% dplyr::select(ll.val)
-  origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% dplyr::select(ll.val)
+  origNull <- baselineDF %>% filter(species == spec, M == nullM) %>% select(ll.val)
+  origAlt <- baselineDF %>% filter(species == spec, M == nullM + 1) %>% select(ll.val)
   # problem when null mod generally doesn't fit, many alternative mods do
   
   BStests <- BSmods %>% filter(species == spec) %>% 

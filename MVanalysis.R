@@ -313,7 +313,6 @@ for (j in 5:length(rdsfiles)){
   
   
   # bestmods will be used for LRT statistic to compare to null distribution from simulations
-  ###PROBLEM HERE nullmods can select models with identical ll.val, doesn't pick just one
   bestmods <- baselineDF %>% group_by(list_index, M) %>%
     filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
     filter(maxNest < 1000 * median(baselineDF$maxNest, na.rm = TRUE)) %>%    ##trying to deal with huge N estimates
@@ -359,7 +358,7 @@ source('bootstrapMfunctions.R')
 
 
 rdsfiles <- list.files("simDataGenMode/")
-j <- 4
+j <- 14
 
 
 sp <- unlist(strsplit(rdsfiles[j], split = "cov", fixed = TRUE))[1]
@@ -372,19 +371,19 @@ save(list = dataIN1, file = "dataIN1.RData")
 # simple param file for slurm.apply
 paramIN <- data.frame(nRun = sample(seq(1:length(SampleList)))) # random nRun so split even for parallel
 
-cl <- makeCluster(4)
-clusterEvalQ(cl, {
-  library(devtools)
-  library(msm)
-  library(dplyr)
-  library(StopoverCode) #on linux
-  # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
-  load("dataIN.RData")
-})
-time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
-stopCluster(cl)
-
-saveRDS(test, file = "eurpBSmod.rds")
+# cl <- makeCluster(4)
+# clusterEvalQ(cl, {
+#   library(devtools)
+#   library(msm)
+#   library(dplyr)
+#   library(StopoverCode) #on linux
+#   # devtools::load_all("StopoverCode", recompile = TRUE) # on windows
+#   load("dataIN.RData")
+# })
+# time <- system.time({test <- parLapply(cl, paramIN$nRun, SlurmGenerationP1)})
+# stopCluster(cl)
+# 
+# saveRDS(test, file = "eurpBSmod.rds")
 
 
 # calculate null hypotheses for same species, different years
@@ -424,8 +423,8 @@ for (j in 1:length(slurm_codes)){
 test <- do.call(rbind, lapply(slurm_out, function(x) length(x)))
 # setwd("../")
 
-outList <- readRDS("eurpBSmod.rds")
-# outList <- slurm_out
+# outList <- readRDS("npeBSmod.rds")
+outList <- slurm_out
 outDF <- list()
 for (i in 1:length(outList)){
   if (length(outList[[i]]) == 1){
@@ -496,7 +495,7 @@ BSmods$M[BSmods$model == "alt"] <- BSmods$M[BSmods$model == "alt"] + 1
 # BSmods <- BSmods %>% filter(param_row == 12)
 
 # from baselineDF from slurmCov
-slurm_out<- readRDS("slurmCovOutput/EURcov.rds")
+slurm_out<- readRDS("slurmCovOutput/BLSWALLslurmcovs.rds")
 
 outList <- slurm_out
 outDF <- list()
@@ -529,11 +528,7 @@ baselineDF <- outDF
 
 bestmods <- baselineDF %>% group_by(list_index, M) %>%
   filter(ll.val == max(ll.val, na.rm = TRUE)) %>%
-  mutate(tempindex = length(ll.val)) %>%
-  filter(tempindex == 1) %>%
-  select(-tempindex) %>%
   arrange(list_index)
-
 
 
 # tests <- baselineDF[c(2, 3, 7),]
@@ -548,8 +543,8 @@ for (i in 1:length(unique(bestmods$list_index))){
   testM <- testM[-which(testM == max(testM))]
   out <- data.frame()
   for (m in testM){
-    tempBSmods <- BSmods %>% dplyr::filter(list_index == tempindex) %>%
-      dplyr::filter(M == m & model == "null" | M == (m + 1) & model == "alt")
+    tempBSmods <- BSmods %>% filter(list_index == tempindex) %>%
+      filter(M == m & model == "null" | M == m + 1 & model == "alt")
     if (nrow(tempBSmods) == 0){
       pval <- data.frame(nullM = m, pval = NA, nfits = 0, nullNA = NA, altNA = NA)
     } else {
